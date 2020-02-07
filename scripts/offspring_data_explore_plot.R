@@ -1,7 +1,8 @@
 rm(list = ls())
 
 .packagesdev = "thomasp85/patchwork"
-.packages = c("ggplot2", "dplyr", "reshape2", "parallel", "optparse", "tidyr", "splitstackshape", "data.table", "gdata")
+.packages = c("ggplot2", "dplyr", "reshape2", "parallel", "optparse", "tidyr", "splitstackshape", "data.table", "gdata",
+              "Rmisc", "ggrepel")
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
 .instdev <- basename(.packagesdev) %in% installed.packages()
@@ -413,6 +414,11 @@ head(sdt)
 cdt = merge(mdt, sdt, by = "snail_ID")
 head(cdt)
 tail(cdt)
+
+# mdt[which(mdt$snail_ID=="G_O7"), "snail_ID"] = "G_07"
+# cdt[which(cdt$snail_ID=="G_O7"), "snail_ID"] = "G_07"
+# merge(mdt, cdt, by = "snail_ID", all = TRUE)
+
 cdt$pop = substr(cdt$snail_ID, start = 1, stop = 1)
 e_LCmeanDist = aggregate(cdt[, paste0(island, "_LCmeanDist")], by=list(cdt$pop), mean)
 colnames(e_LCmeanDist) = c("pop", "e_LCmeanDist")
@@ -428,6 +434,7 @@ head(edt)
 str(edt)
 
 phenos = c("bold_score", "mean_thickness", "weight_g")
+library(ggplot2)
 phenos_plot = lapply(seq_along(phenos), function(x) {
   ggplot(data = edt) +
     facet_wrap(~generation) +
@@ -437,7 +444,7 @@ phenos_plot = lapply(seq_along(phenos), function(x) {
     theme(legend.position = "none",
           strip.text = element_text(size=13),
           strip.background = element_rect(fill="lightblue", colour="black", size=0.5),
-          axis.title = element_text(size = 12),
+          axis.title = element_text(size = 18),
           axis.text = element_text(size=11),
           axis.ticks = element_line(size = 0.7),
           panel.background = element_blank(),
@@ -448,10 +455,11 @@ phenos_plot = lapply(seq_along(phenos), function(x) {
 })
 dir.create(path = paste0(dirname(dat_dir), "/", island, "_off_final_figures"))
 (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+ext = 'pdf'
 lapply(seq_along(phenos), function(x) {
   ggsave(filename = paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_",
-                           phenos[x], "_scatter_", cdate, ".svg"),
-         plot = phenos_plot[[x]], device = "svg", width = 8, height = 8)
+                           phenos[x], "_scatter_", cdate, ".", ext),
+         plot = phenos_plot[[x]], device = ext, width = 8, height = 8)
 })
 
 weight_sort = edt[order(edt$weight_g, decreasing = TRUE),]
@@ -484,7 +492,7 @@ pca_plot = lapply(seq_along(col_pc), function(x) {
     theme(legend.position = "none",
           strip.text = element_text(size=13),
           strip.background = element_rect(fill="lightblue", colour="black", size=0.5),
-          axis.title = element_text(size = 12),
+          axis.title = element_text(size = 18),
           axis.text = element_text(size=11),
           axis.ticks = element_line(size = 0.7),
           panel.background = element_blank(),
@@ -495,8 +503,8 @@ pca_plot = lapply(seq_along(col_pc), function(x) {
 })
 lapply(seq_along(col_pc), function(x) {
   ggsave(filename = paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_",
-                           col_pc[x], "_scatter_", cdate, ".svg"),
-         plot = pca_plot[[x]], device = "svg", width = 8, height = 8)
+                           col_pc[x], "_scatter_", cdate, ".", ext),
+         plot = pca_plot[[x]], device = ext, width = 8, height = 8)
 })
 
 # there are no IDs starting from 200, only 300
@@ -504,8 +512,225 @@ pc2_sort = pca_edt[order(pca_edt$PC2, decreasing = TRUE),]
 pc2_sort[pc2_sort$generation==1, c("ID", "PC2")][1:20, ]
 tail(pc2_sort[pc2_sort$generation==1, c("ID", "PC2")])
 
+# plot lab vs wild
+table(edt$generation)
+head(edt)
+
+pheno_calc = function(datas, phen, grp) {
+  nn_na = datas[!is.na(datas[, phen]), ]
+  rawdt = aggregate(nn_na[, phen], by=list(nn_na[, "generation"], nn_na[, grp]), CI)[-1, ]
+  # rawdt = aggregate(nn_na[, phen], by=list(nn_na[, "generation"], nn_na[, grp]), CI)
+  # if (phen=="bold_score") {
+  #   rawdt = rawdt[-1, ]
+  # }
+  return(rawdt)
+}
+phendt = pheno_calc(datas = edt, phen = "bold_score", grp = "e_LCmeanDist")
+head(pca_edt)
+lapply(seq_along(col_pc), function(x) {
+  phendt = pheno_calc(datas = pca_edt, phen = col_pc[x], grp = "e_LCmeanDist")
+})
+ggplot() +
+  geom_point(aes(x = phendt[phendt$Group.1==0, "x"][, "mean"], y = phendt[phendt$Group.1==1, "x"][, "mean"]))
 
 
+# edt[!is.na(edt$bold_score),]
+# aggregate(edt$bold_score, by=list(edt$e_LCmeanDist), CI)
+# str(edt)
+# table(edt$e_LCmeanDist)
+# edt$e_LCmeanDist = round(edt$e_LCmeanDist, 2)
+# edt[edt$e_LCmeanDist==247.71,]
+
+phenos_plot = lapply(seq_along(phenos), function(x) {
+  phendt = pheno_calc(datas = edt, phen = phenos[x], grp = "e_LCmeanDist")
+  ggplot() +
+    geom_abline(slope = 1, linetype="dashed") +
+    geom_point(aes(x = phendt[phendt$Group.1==0, "x"][, "mean"], y = phendt[phendt$Group.1==1, "x"][, "mean"]),
+               size=3) +
+    geom_label_repel(aes(x = phendt[phendt$Group.1==0, "x"][, "mean"], y = phendt[phendt$Group.1==1, "x"][, "mean"],
+                         label = LETTERS[2:18]),
+                     box.padding   = 0.35, 
+                     point.padding = 0.5,
+                     segment.color = 'grey50') +
+    labs(title = phenos[x], x = "wild sample", y = "lab-reared sample") +
+    theme(legend.position = "none",
+          plot.title = element_text(size = 19, hjust = 0.5),
+          axis.title = element_text(size = 18),
+          axis.text = element_text(size=11),
+          axis.ticks = element_line(size = 0.7),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2))
+})
+phenos_plot
+dir.create(path = paste0(dirname(dat_dir), "/", island, "_off_final_figures"))
+(cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+ext = 'pdf'
+lapply(seq_along(phenos), function(x) {
+  ggsave(filename = paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_",
+                           phenos[x], "_LABvsWILD_", cdate, ".", ext),
+         plot = phenos_plot[[x]], device = ext, width = 8, height = 8)
+})
+
+pcs_plot = lapply(seq_along(col_pc), function(x) {
+  phendt = pheno_calc(datas = pca_edt, phen = col_pc[x], grp = "e_LCmeanDist")
+  ggplot() +
+    geom_abline(slope = 1, linetype="dashed") +
+    geom_point(aes(x = phendt[phendt$Group.1==0, "x"][, "mean"], y = phendt[phendt$Group.1==1, "x"][, "mean"]),
+               size=3) +
+    geom_label_repel(aes(x = phendt[phendt$Group.1==0, "x"][, "mean"], y = phendt[phendt$Group.1==1, "x"][, "mean"],
+                         label = LETTERS[2:18]),
+                     box.padding   = 0.35, 
+                     point.padding = 0.5,
+                     segment.color = 'grey50') +
+    labs(title = col_pc[x], x = "wild sample", y = "lab-reared sample") +
+    theme(legend.position = "none",
+          plot.title = element_text(size = 19, hjust = 0.5),
+          axis.title = element_text(size = 18),
+          axis.text = element_text(size=11),
+          axis.ticks = element_line(size = 0.7),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2))
+})
+pcs_plot
+# dir.create(path = paste0(dirname(dat_dir), "/", island, "_off_final_figures"))
+# (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+# ext = 'pdf'
+lapply(seq_along(col_pc), function(x) {
+  ggsave(filename = paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_",
+                           col_pc[x], "_LABvsWILD_", cdate, ".", ext),
+         plot = pcs_plot[[x]], device = ext, width = 8, height = 8)
+})
+
+###########################
+######### CZ data #########
+###########################
+island = "CZA"
+dir.create(paste0(island, "_wild_SW"))
+dir.create(paste0(island, "_wild_SW/", island, "_wild_raw_data"))
+phenos = c("boldness", "shape", "spatial", "thickness", "weight")
+# cz_gen = "gen1"
+if (island=="CZA") {
+  dat_dir = "CZA_off_SW/CZA_wild_raw_data"
+} else {
+  dat_dir = "CZD_off_SW/CZD_wild_SW_Oct2016_rawdata"
+}
+phen_fl = lapply(1:length(phenos), function(x) {
+  if (island=="CZD") {
+    list.files(path = dat_dir, pattern = paste0(cz_gen, "_\\d+_", phenos[x]), full.names = TRUE)
+  } else {
+    list.files(path = dat_dir, pattern = phenos[x], full.names = TRUE)
+  }
+})
+phen_dt = lapply(1:length(phenos), function(x) {
+  lapply(1:length(phen_fl[[x]]), function(y) {
+    read.csv(file = phen_fl[[x]][y])
+  })
+})
+
+phen_all = lapply(1:length(phenos), function(x) {
+  phen_merged = Reduce(function(...) merge(..., all=TRUE), phen_dt[[x]])
+  phen_merged[, "snail_ID"] = as.character(phen_merged[, "snail_ID"])
+  return(phen_merged)
+})
+lapply(phen_all, head)
+lapply(phen_all, colnames)
+lapply(phen_all, nrow)
+# head(phen_all[[4]])
+phen_all_dt = Reduce(function(...) merge(..., all=TRUE, by="snail_ID"), phen_all)
+head(phen_all_dt)
+colnames(phen_all_dt)
+colnames(phen_all_dt)[which(colnames(phen_all_dt)=="log_mean_bold")] = "bold_score"
+sum(grepl(pattern = "snail_ID", x = colnames(phen_all_dt)))
+phen_all_dt = mutate(phen_all_dt,
+                     mean_thickness = rowMeans(phen_all_dt[, grepl(pattern = "thickness", x = colnames(phen_all_dt))],
+                                               na.rm = TRUE))
+
+(cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+# getwd()
+dir.create(paste0(island, "_wild_SW/", island, "_wild_final_data"))
+findat_dir = paste0(island, "_wild_SW/", island, "_wild_final_data")
+if (exists("cz_gen")) {
+  write.csv(phen_all_dt, file = paste0(dat_dir, "/", island, "_off_", cz_gen,"_all_phenos_", cdate, ".csv"), row.names = FALSE)
+} else {
+  write.csv(phen_all_dt, file = paste0(findat_dir, "/", island, "_wild_all_phenos_", cdate, ".csv"), row.names = FALSE)
+}
+
+phen_all_dt = read.csv("CZA_wild_SW/CZA_wild_final_data/CZA_wild_all_phenos_20200113.csv")
+summary(phen_all_dt)
+phen_all_dt$LCmeanDist = round(phen_all_dt$LCmeanDist, 1)
+
+wild_phenos = colnames(phen_all_dt)[grepl(pattern = "score|PC|mean_thick|weight", x = colnames(phen_all_dt))]
+# colnames(edt)[grepl(pattern = "score|PC|mean_thick|weight", x = colnames(edt))]
+
+
+edt$e_LCmeanDist = round(edt$e_LCmeanDist)
+table(edt$e_LCmeanDist)
+table(phen_all_dt$LCmeanDist)
+intersect(phen_all_dt$LCmeanDist, edt$e_LCmeanDist)
+
+range(edt$e_LCmeanDist)
+unique(edt$pop)
+unique(edt$e_LCmeanDist)
+length(unique(edt$e_LCmeanDist))
+dist_brk = seq(min(edt$e_LCmeanDist)-1, to = max(edt$e_LCmeanDist)+1, length.out = length(unique(edt$pop)))
+length(dist_brk)
+colnames(phen_all_dt)
+wild_edt = phen_all_dt[, c(wild_phenos, "LCmeanDist")]
+
+# wild_edt$dist_bin = cut(wild_edt$LCmeanDist, dist_brk)
+
+wild_edt$dist_bin = cut(wild_edt$LCmeanDist, unique(edt$e_LCmeanDist), include.lowest = TRUE)
+
+wild_edt_bin = wild_edt[!is.na(wild_edt$dist_bin), ]
+aggregate(x = wild_edt_bin, by = list(wild_edt_bin$dist_bin), FUN = mean)
+
+pheno_calc = function(datas, phen, grp) {
+  nn_na = datas[!is.na(datas[, phen]), ]
+  # rawdt = aggregate(nn_na[, phen], by=list(nn_na[, "generation"], nn_na[, grp]), CI)[-1, ]
+  rawdt = aggregate(nn_na[, phen], by=list(nn_na[, grp]), CI)
+  # if (phen=="bold_score") {
+  #   rawdt = rawdt[-1, ]
+  # }
+  return(rawdt)
+}
+table(wild_edt_bin$dist_bin)
+head(edt)
+unique(edt[order(edt$e_LCmeanDist), "e_LCmeanDist"])
+edt = edt[order(edt$e_LCmeanDist), ]
+
+pheno_calc(datas = wild_edt_bin, phen = wild_phenos[5], grp = "dist_bin")
+genx = 0
+one_gen_edt = edt[edt$generation==genx, ]
+one_gen_edt$dist_bin = cut(one_gen_edt$e_LCmeanDist, unique(edt$e_LCmeanDist), include.lowest = TRUE)
+one_gen_phenos = colnames(one_gen_edt)[grepl(pattern = "score|PC|mean_thick|weight", x = colnames(one_gen_edt))]
+wild_phenos = intersect(one_gen_phenos, wild_phenos)
+# table(one_gen_edt$dist_bin)
+# unique(one_gen_edt[, c("pop", "dist_bin")])
+unique(wild_edt_bin$dist_bin)
+
+
+lapply(seq_along(wild_phenos), function(x) {
+  one_gen_bin = pheno_calc(datas = one_gen_edt, phen = wild_phenos[x], grp = "dist_bin")
+  one_phen_bin = pheno_calc(datas = wild_edt_bin, phen = wild_phenos[x], grp = "dist_bin")
+  # one_phen_bin$e_LCmeanDist = sort(unique(edt$e_LCmeanDist))
+  ggplot() +
+    geom_abline(slope = 1, linetype = 'dashed') +
+    geom_point(aes(x = one_gen_bin[, 'x'][,'mean'], y = one_phen_bin[, 'x'][,'mean'])) +
+    labs(x = "lab-reared generation 0", y = paste0("wild ", island, " sample"), title = wild_phenos[x]) +
+    theme(plot.title = element_text(hjust = 0.5))
+})
+
+one_gen_pl = ggplot(data = one_gen_edt, aes(x = e_LCmeanDist, y = weight_g)) +
+  geom_point()
+wild_edt_pl = ggplot(data = wild_edt_bin, aes(x = LCmeanDist, y = weight_g)) +
+  geom_point()
+one_gen_pl + wild_edt_pl
 
 
 
