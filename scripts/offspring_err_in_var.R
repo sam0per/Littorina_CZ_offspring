@@ -26,6 +26,8 @@ if (is.null(opt$island) | is.null(opt$stanfile)){
 
 # pref_out = opt$output
 island = opt$island
+stanfile = opt$stanfile
+# stanfile = "Littorina_offspring/scripts/offspring_err_in_var_model.stan"
 # island = "CZA"
 # cz_gen = "gen1"
 cz_phen = "mean_thickness"
@@ -73,12 +75,12 @@ y_meas[, paste0("scaled_", cz_phen)] = scale(y_meas$x[,"mean"])[,1]
 x_meas = x_meas[x_meas$pop!=diff_pop,]
 
 rstan_options(auto_write = TRUE)
-options(mc.cores = 4)
-# options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
+# options(mc.cores = 4)
+options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
 
 dat = list(N = nrow(x_meas), x_meas = x_meas$scaled_mean_thickness, tau = x_meas$x[, 'sd'],
            y_mean = y_meas$scaled_mean_thickness)
-err_in_var = rstan::stan(file = opt$stanfile,
+err_in_var = rstan::stan(file = stanfile,
                          data = dat, iter = 8000, warmup = 2000,
                          chains=4, refresh=8000)
 dir.create(paste0(island, "_off_SW/", island, "_off_results"))
