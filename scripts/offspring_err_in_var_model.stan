@@ -19,7 +19,7 @@ data {
 
 // The parameters accepted by the model.
 parameters {
-  real x[N];
+  vector[N] x;
   real mu_x;
   real sigma_x;
   real alpha;
