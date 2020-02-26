@@ -33,8 +33,8 @@ parameters {
 model {
   x ~ normal(mu_x, sigma_x);
   x_meas ~ normal(x, tau);
-  a ~ normal(0, 5)
-  b ~ normal(1, 5)
+  alpha ~ normal(0, 5)
+  beta ~ normal(1, 5)
   sigma_y ~ cauchy(0, 5);
   y_mean ~ normal(alpha + beta * x, sigma_y);
 }
