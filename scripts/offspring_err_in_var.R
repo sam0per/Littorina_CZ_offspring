@@ -59,7 +59,6 @@ x_meas[, paste0("scaled_", cz_phen)] = scale(x_meas$x[,"mean"])[,1]
 # mean(x_meas$x)
 # sd(x_meas$x)
 
-
 dat_gen1 = dat_off[dat_off$generation==1, c("pop", "ID", cz_phen)]
 table(dat_gen1$pop)
 mean(dat_gen1[dat_gen1$pop=="B", cz_phen], na.rm = TRUE)
@@ -73,6 +72,8 @@ y_meas[, paste0("scaled_", cz_phen)] = scale(y_meas$x[,"mean"])[,1]
 
 (diff_pop = setdiff(x_meas$pop, y_meas$pop))
 x_meas = x_meas[x_meas$pop!=diff_pop,]
+
+plot(x_meas$scaled_mean_thickness, y_meas$scaled_mean_thickness)
 
 rstan_options(auto_write = TRUE)
 # options(mc.cores = 4)
@@ -88,4 +89,6 @@ res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 dir.create(paste0(res_dir, "models"))
 
 saveRDS(err_in_var, paste0(res_dir, "models/err_in_var.rds"))
+# err_in_var = readRDS(paste0(res_dir, "models/err_in_var.rds"))
+
 launch_shinystan(err_in_var)

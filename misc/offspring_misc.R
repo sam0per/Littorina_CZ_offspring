@@ -1,4 +1,81 @@
 rm(list = ls())
+#######################################
+###### error-in-variables models ######
+#######################################
+# https://www.r-bloggers.com/errors-in-variables-models-in-stan/
+setwd("Littorina_offspring/misc/")
+n.reps <- 3
+n.repeated <- 10
+n <- 50
+
+# true covariate values
+x <- runif(n, -3, 3)
+y <- x + rnorm(n)  # alpha=0, beta=1, sdy=1
+plot(x,y)
+
+# random subset to perform repeat covariate measurements
+which.repeated <- sample(n, n.repeated)
+xsd <- 1  # measurement error
+xerr <- rnorm(n + (n.repeated * (n.reps - 1)), 0, xsd)
+
+# indx assigns measurements to sample units
+indx <- c(1:n, rep(which.repeated, each = n.reps - 1))
+indx <- sort(indx)
+nobs <- length(indx)
+xobs <- x[indx] + xerr
+plot(x[indx], xobs,
+     xlab = "True covariate value",
+     ylab = "Observed covariate value")
+abline(0, 1, lty = 2)
+segments(x0 = x[indx], x1 = x[indx],
+         y0 = x[indx], y1 = xobs, col = "red")
+abline(v = x[which.repeated], col = "green", lty = 3)
+
+# write the .stan file
+cat("
+data{
+  int n;
+  int nobs;
+  real xobs[nobs];
+  real y[n];
+  int indx[nobs];
+}
+
+parameters {
+  real alpha;
+  real beta;
+  real sigmay;
+  real sigmax;
+  real x[n];
+}
+
+model {
+  // priors
+  alpha ~ normal(0,100);
+  beta ~ normal(0,100);
+  sigmay ~ uniform(0,1000);
+  sigmax ~ uniform(0,1000);
+  
+  // model structure  
+  for (i in 1:nobs){
+    xobs[i] ~ normal(x[indx[i]], sigmax);
+  }
+  for (i in 1:n){
+    y[i] ~ normal(alpha + beta*x[i], sigmay);
+  }
+}
+  ",
+file = "latent_x.stan")
+
+library(rstan)
+library(modeest)
+stan_d <- c("y", "xobs", "nobs", "n", "indx")
+chains <- 3
+iter <- 1000
+thin <- 1
+mod1 <- stan(file = "latent_x.stan", data = stan_d,
+             chains = chains, iter = iter,
+             thin = thin)
 ########################
 ###### cline plot ######
 ########################
@@ -154,3 +231,12 @@ segments(x0 = 0.6, y0 = 0.6, x1 = 1, y1 = 0.8, lwd=4)
 # segments(x0 = 0.8, y0 = 0.8, x1 = 1, y1 = 0.9, lwd=4)
 segments(x0 = 1, y0 = 0.8, x1 = 1, y1 = 1.2, lwd=4)
 dev.off()
+
+######################
+###### stanfile ######
+######################
+# transformed parameters {
+#   for (i in 1:N) {
+#     x_meas[i] = 1 / (sigma_x[i] * sqrt(2 * pi)) * exp(- (x - mu)^2 / (2 * sigma_x[i]^2))
+#   }
+# }
