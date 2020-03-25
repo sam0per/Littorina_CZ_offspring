@@ -27,7 +27,7 @@ parameters {
 }
 
 transformed parameters {
-  vector[N] mu_yhat = beta0 + beta1 * x_lat;
+  vector[N] mu_yhat = alpha + beta * x_lat;
 }
 
 // The model to be estimated. We model the output
