@@ -38,8 +38,8 @@ model {
   beta ~ normal(1., 5.);
   sigma ~ cauchy(0., 5);
   
-  xhat ~ normal(x_lat, sd_x);
+  x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);
-  yhat ~ normal(y_lat, sd_y);
+  y ~ normal(y_lat, sd_y);
 }
 
