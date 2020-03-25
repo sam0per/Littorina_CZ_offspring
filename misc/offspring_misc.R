@@ -1,4 +1,42 @@
 rm(list = ls())
+
+####################################
+####### Spatial structure and ######
+# relationship between populations #
+####################################
+x <- seq(-6, 6, length.out = 101)
+cline_pl <- function(position,centre,w,left,right,sl,sc,sr){
+  d <- position-centre
+  p_x <- 1/(1+exp(0-4*(d)/w)) 
+  # p_x is frequency cline as in HZAR NB p=0 for left, 1 for right (corresponding to scaling phenotypes with crab=0, wave=1)
+  z_x <- left + (right-left)*p_x  
+  # z_x is expected phenotype, wave-crab always positive, given scaling
+  s_x <- sqrt(sl^2 + 4*p_x*(1-p_x)*sc^2 + (p_x^2)*(sr^2-sl^2))
+  # unimodal variance model as in HZAR, sx is SD for wave/hybrid/crab (assumes variances are additive, unlike Cfit)
+  # minusll <- -sum(dnorm(phen,z_x,s_x,log=T))
+  # return(minusll)
+  phen_cline = data.frame(phen_cline = z_x, sd_cline = s_x, position = position)
+  return(phen_cline)
+}
+y2 = cline_pl(position = x, centre = 0, w = 2, left = 1.2, right = 0, sl = 0.1, sc = 0.1, sr = 0.1)[, "phen_cline"]
+pdf(file = "/Users/samuelperini/Documents/research/projects/3.indels/Littorina_saxatilis/short_genetic_variants/misc/pure_C_W_freqs.pdf")
+plot(x, y2, type = "l", col = "#998ec3", lwd = 4,
+     xlab = "Distance", ylab = "Phenotype", ylim = c(0,1.2))
+# grid()
+text(x = -4, y = 0.2, labels = "BOULDER", cex = 1)
+text(x = 4, y = 0.2, labels = "ROCK", cex = 1)
+abline(v = 0)
+abline(v = -2, lty = "dashed", col='red')
+abline(v = 2, lty = "dashed", col='red')
+abline(v = -3.5, col = "red")
+text(x = -2.8, y = 1, labels = "15m", cex = 1, col="red")
+text(x = -5, y = 1, labels = "pure crab", cex = 1, col="red")
+abline(v = 4, col = "red")
+text(x = 3, y = 1, labels = "40m", cex = 1, col="red")
+text(x = 5, y = 1, labels = "pure wave", cex = 1, col="red")
+text(x = -1, y = 0.5, labels = "centre - 1/2 width", cex = 1)
+text(x = 1, y = 0.7, labels = "centre + 1/2 width", cex = 1)
+dev.off()
 #######################################
 ###### error-in-variables models ######
 #######################################

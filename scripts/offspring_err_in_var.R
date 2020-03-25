@@ -56,31 +56,33 @@ x_meas = aggregate(x = dat_gen0[, cz_phen], by = list(pop = dat_gen0$pop),
                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
 # class(x_meas)
 x_meas[, paste0("scaled_", cz_phen)] = scale(x_meas$x[,"mean"])[,1]
+x_meas[, paste0("scaled_sd_", cz_phen)] = x_meas$x[,"sd"] / sd(x_meas$x[, "mean"])
 # mean(x_meas$x)
 # sd(x_meas$x)
 
 dat_gen1 = dat_off[dat_off$generation==1, c("pop", "ID", cz_phen)]
 table(dat_gen1$pop)
-mean(dat_gen1[dat_gen1$pop=="B", cz_phen], na.rm = TRUE)
+# mean(dat_gen1[dat_gen1$pop=="B", cz_phen], na.rm = TRUE)
 y_meas = aggregate(x = dat_gen1[, cz_phen], by = list(pop = dat_gen1$pop),
                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
 y_meas = y_meas[complete.cases(y_meas), ]
 # class(x_meas)
 y_meas[, paste0("scaled_", cz_phen)] = scale(y_meas$x[,"mean"])[,1]
+y_meas[, paste0("scaled_sd_", cz_phen)] = y_meas$x[,"sd"] / sd(y_meas$x[, "mean"])
 # mean(x_meas$x)
 # sd(x_meas$x)
 
 (diff_pop = setdiff(x_meas$pop, y_meas$pop))
 x_meas = x_meas[x_meas$pop!=diff_pop,]
 
-plot(x_meas$scaled_mean_thickness, y_meas$scaled_mean_thickness)
+# plot(x_meas$scaled_mean_thickness, y_meas$scaled_mean_thickness)
 
 rstan_options(auto_write = TRUE)
-# options(mc.cores = 4)
-options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
+options(mc.cores = 4)
+# options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
 
-dat = list(N = nrow(x_meas), x_meas = x_meas$scaled_mean_thickness, tau = x_meas$x[, 'sd'],
-           y_mean = y_meas$scaled_mean_thickness)
+dat = list(N = nrow(x_meas), x = x_meas$scaled_mean_thickness, sd_x = x_meas$scaled_sd_mean_thickness,
+           y = y_meas$scaled_mean_thickness, sd_y = y_meas$scaled_sd_mean_thickness)
 err_in_var = rstan::stan(file = stanfile,
                          data = dat, iter = 8000, warmup = 2000,
                          chains=4, refresh=8000)
@@ -91,4 +93,4 @@ dir.create(paste0(res_dir, "models"))
 saveRDS(err_in_var, paste0(res_dir, "models/err_in_var.rds"))
 # err_in_var = readRDS(paste0(res_dir, "models/err_in_var.rds"))
 
-launch_shinystan(err_in_var)
+# launch_shinystan(err_in_var)
