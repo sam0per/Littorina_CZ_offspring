@@ -52,11 +52,21 @@ dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
 dat_gen0 = dat_off[dat_off$generation==0, c("pop", "ID", cz_phen)]
 table(dat_gen0$pop)
 # mean(dat_gen0[dat_gen0$pop=="A", cz_phen])
+
+############################################
+######### TEST WITH ONE POPULATION #########
+
+
+############################################
 x_meas = aggregate(x = dat_gen0[, cz_phen], by = list(pop = dat_gen0$pop),
                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+# mean(dat_gen0[dat_gen0$pop=="B", cz_phen], na.rm = TRUE)
+# sd(dat_gen0[dat_gen0$pop=="B", cz_phen], na.rm = TRUE)
 # class(x_meas)
 x_meas[, paste0("scaled_", cz_phen)] = scale(x_meas$x[,"mean"])[,1]
 x_meas[, paste0("scaled_sd_", cz_phen)] = x_meas$x[,"sd"] / sd(x_meas$x[, "mean"])
+# xtable::xtable(x = cbind(Pop = x_meas$pop, round(x_meas$x, 2), scaled_mean_thickness = round(x_meas$scaled_mean_thickness, 2),
+#                          scaled_sd_thickness = round(x_meas$scaled_sd_mean_thickness, 2)))
 # mean(x_meas$x)
 # sd(x_meas$x)
 
