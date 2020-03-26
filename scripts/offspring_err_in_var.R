@@ -97,12 +97,12 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = 4)
 # options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
 
-dat = list(N = nrow(x_meas), x = x_meas$scaled_mean_thickness, sd_x = x_meas$scaled_sd_mean_thickness,
-           y = y_meas$scaled_mean_thickness, sd_y = y_meas$scaled_sd_mean_thickness)
+dat = list(N = nrow(x_meas), x = x_meas$scaled_mean_thickness, sd_x = x_meas$x[,"sd"],
+           y = y_meas$scaled_mean_thickness, sd_y = y_meas$x[,"sd"])
 err_in_var = rstan::stan(file = stanfile,
                          data = dat, iter = 12000, warmup =4000,
                          chains=4, refresh=12000,
-                         control = list(adapt_delta = 0.99))
+                         control = list(stepsize=0.01, adapt_delta = 0.99))
 dir.create(paste0(island, "_off_SW/", island, "_off_results"))
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 dir.create(paste0(res_dir, "models"))
