@@ -37,7 +37,7 @@ model {
   x_lat ~ normal(0, 100);
   alpha ~ normal(0, 10);
   beta ~ normal(1, 10);
-  sigma ~ normal(0, 25);
+  sigma ~ normal(0, 100);
   
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);
