@@ -105,6 +105,7 @@ err_in_var = rstan::stan(file = stanfile,
 dir.create(paste0(island, "_off_SW/", island, "_off_results"))
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 dir.create(paste0(res_dir, "models"))
+dir.create(paste0(res_dir, "tables"))
 
 saveRDS(err_in_var, paste0(res_dir, "models/err_in_var.rds"))
 # err_in_var = readRDS(paste0(res_dir, "models/err_in_var.rds"))
@@ -118,5 +119,6 @@ print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 # dim(postd$alpha)
 
 stbl = rstan::summary(err_in_var)
-xtable::xtable(stbl$summary)
+write.csv(x = stbl$summary, file = paste0(res_dir, "tables/err_in_var_stanfit.csv"))
+# xtable::xtable(stbl$summary)
 # xtable::xtable(stbl)
