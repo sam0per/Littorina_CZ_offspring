@@ -189,3 +189,6 @@ pairs(err_in_var, pars = pars, include = TRUE)
 # pairs(err_in_var, pars = "mu_yhat", include = TRUE)
 ```
 
+\
+
+Divergent transitions increase when the prior ranges are reduced.
