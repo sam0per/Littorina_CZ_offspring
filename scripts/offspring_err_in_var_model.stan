@@ -31,8 +31,8 @@ transformed parameters {
 }
 
 // The model to be estimated. We model the output
-// 'y_mean' to be normally distributed with mean 'alpha + beta * x'
-// and standard deviation 'sigma_y'.
+// 'y_lat' to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
+// and standard deviation 'sigma'.
 model {
   x_lat ~ normal(0, 100);
   alpha ~ normal(0, 10);

@@ -145,14 +145,35 @@ transformed parameters {
 // 'y_lat' to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
 // and standard deviation 'sigma'.
 model {
-  x_lat ~ normal(0., 100.);
-  alpha ~ normal(0., 5.);
-  beta ~ normal(1., 5.);
-  sigma ~ normal(0., 10.);
+  x_lat ~ normal(0, 100);
+  alpha ~ normal(0, 10);
+  beta ~ normal(1, 10);
+  sigma ~ normal(0, 100);
   
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);
   y ~ normal(y_lat, sd_y);
 }
+```
+
+Warning messages:
+
+1: There were 1568 divergent transitions after warmup. Increasing adapt_delta above 0.8 may help. See http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+
+2: There were 3 chains where the estimated Bayesian Fraction of Missing Information was low. See
+http://mc-stan.org/misc/warnings.html#bfmi-low
+
+\
+
+Since we standardized the data we know $\alpha$ should be centered near 0 and $\beta$ near 1.
+
+```{r stables, echo=FALSE}
+res_dir = paste0(island, "_off_SW/", island, "_off_results/")
+stbl = read.csv(file = paste0("../../", res_dir, "tables/", island, "_err_in_var_stanfit.csv"))
+pars = c("alpha", "beta", "sigma")
+pars_idx = which(as.character(stbl$X) %in% pars)
+kable(stbl[pars_idx, ], caption = "Table 3. Stan parameter estimates.",
+      digits = 2, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 ```
 
