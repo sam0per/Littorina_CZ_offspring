@@ -71,7 +71,7 @@ x_meas[, paste0("scaled_sd_", cz_phen)] = x_meas$x[,"sd"] / sd(x_meas$x[, "mean"
 # sd(x_meas$x)
 
 dat_gen1 = dat_off[dat_off$generation==1, c("pop", "ID", cz_phen)]
-table(dat_gen1$pop)
+# table(dat_gen1$pop)
 # mean(dat_gen1[dat_gen1$pop=="B", cz_phen], na.rm = TRUE)
 y_meas = aggregate(x = dat_gen1[, cz_phen], by = list(pop = dat_gen1$pop),
                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
@@ -84,6 +84,11 @@ y_meas[, paste0("scaled_sd_", cz_phen)] = y_meas$x[,"sd"] / sd(y_meas$x[, "mean"
 
 (diff_pop = setdiff(x_meas$pop, y_meas$pop))
 x_meas = x_meas[x_meas$pop!=diff_pop,]
+
+diff_ypop = which(apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
+                        FUN = function(x) !grepl(pattern = "x", x = x)))
+dat_gen1 = dat_gen1[diff_ypop, ]
+table(dat_gen1$pop)
 
 # plot(x_meas$scaled_mean_thickness, y_meas$scaled_mean_thickness)
 
