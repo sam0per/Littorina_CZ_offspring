@@ -1,0 +1,160 @@
+---
+title: "Plasticity - Littorina offspring"
+author: "Samuel"
+date: "3/25/2020"
+output: 
+  html_document: 
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+.packages = c("optparse", "dplyr", "tidyr", "rstan", "shinystan", "knitr", "kableExtra", "ggrepel")
+# Install CRAN packages (if not already installed)
+.inst <- .packages %in% installed.packages()
+if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
+# Load packages into session
+lapply(.packages, require, character.only=TRUE)
+```
+
+For now, the data and results belong to the island CZA and phenotype thickness.
+
+```{r, echo=FALSE, warning=FALSE}
+island = "CZA"
+cz_phen = "mean_thickness"
+dat_dir = paste0(island, "_off_SW/", island, "_off_final_data/")
+dat_off = read.csv(file = paste0("../../",dat_dir, island, "_off_all_phenos_main_20200110.csv"))
+dat_off = separate(data = dat_off, col = "snail_ID", into = c("pop", "ID"), sep = "_")
+# table(nchar(as.character(dat_off$ID)))
+dat_off[, "generation"] = 1
+dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
+
+dat_gen0 = dat_off[dat_off$generation==0, c("pop", "ID", cz_phen)]
+x_meas = aggregate(x = dat_gen0[, cz_phen], by = list(pop = dat_gen0$pop),
+                   FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+# mean(dat_gen0[dat_gen0$pop=="B", cz_phen], na.rm = TRUE)
+# sd(dat_gen0[dat_gen0$pop=="B", cz_phen], na.rm = TRUE)
+x_meas[, paste0("scaled_", cz_phen)] = scale(x_meas$x[,"mean"])[,1]
+x_meas[, paste0("scaled_sd_", cz_phen)] = x_meas$x[,"sd"] / sd(x_meas$x[, "mean"])
+# xtable::xtable(x = cbind(Pop = x_meas$pop, round(x_meas$x, 2), scaled_mean_thickness = round(x_meas$scaled_mean_thickness, 2),
+#                          scaled_sd_thickness = round(x_meas$scaled_sd_mean_thickness, 2)))
+# mean(x_meas$x)
+# sd(x_meas$x)
+
+dat_gen1 = dat_off[dat_off$generation==1, c("pop", "ID", cz_phen)]
+# table(dat_gen1$pop)
+# mean(dat_gen1[dat_gen1$pop=="B", cz_phen], na.rm = TRUE)
+y_meas = aggregate(x = dat_gen1[, cz_phen], by = list(pop = dat_gen1$pop),
+                   FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
+y_meas = y_meas[complete.cases(y_meas), ]
+y_meas[, paste0("scaled_", cz_phen)] = scale(y_meas$x[,"mean"])[,1]
+y_meas[, paste0("scaled_sd_", cz_phen)] = y_meas$x[,"sd"] / sd(y_meas$x[, "mean"])
+
+diff_pop = setdiff(x_meas$pop, y_meas$pop)
+x_meas = x_meas[x_meas$pop!=diff_pop,]
+# diff_ypop = setdiff(unique(dat_gen1$pop), y_meas$pop)
+diff_ypop = which(apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
+                        FUN = function(x) !grepl(pattern = "x", x = x)))
+dat_gen1 = dat_gen1[diff_ypop, ]
+```
+
+For each population it was calculated the mean and standard deviation of the phenotype of interest and these measures were scaled as
+
+\begin{equation}
+    \hat{x} = \frac{x - \overline{x}}{\sigma_x}.
+\end{equation}
+
+\begin{equation}
+    \hat{y} = \frac{y - \overline{y}}{\sigma_y}.
+\end{equation}
+
+\begin{equation}
+    \hat{\sigma_x} = \frac{\sigma_x}{\sigma_{xt}}.
+\end{equation}
+
+\begin{equation}
+    \hat{\sigma_y} = \frac{\sigma_y}{\sigma_{yt}}.
+\end{equation}
+
+where $x$ and $y$ are the means for one population of parents and offspring, respectively. Scaled variables are marked with $\hat{}$, means are marked with $\overline{}$, and SD of each population and SD for the whole dataset are repsectvely referred as $\sigma$ and $\sigma_t$.
+
+```{r tables, echo=FALSE}
+tb1 = cbind(data.frame(table(dat_gen0$pop)[-1]), x_meas$x, x_meas$scaled_mean_thickness, x_meas$scaled_sd_mean_thickness)
+colnames(tb1) = c("Pop", "Count", "Mean thick", "SD thick", "Scaled mean", "Scaled SD")
+kable(tb1, caption = "Table 1. Observed data for parental populations.",
+      digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+tb2 = cbind(data.frame(table(dat_gen1$pop)), y_meas$x, y_meas$scaled_mean_thickness, y_meas$scaled_sd_mean_thickness)
+colnames(tb2) = colnames(tb1)
+kable(tb2, caption = "Table 2. Observed data for offspring populations.",
+      digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+```{r figs, echo=FALSE, fig.cap="Figure 1. Scatter plot of the scaled data."}
+ggplot(data = data.frame(x = x_meas$scaled_mean_thickness, y = y_meas$scaled_mean_thickness)) +
+    geom_abline(slope = 1, linetype="dashed") +
+    geom_point(aes(x = x, y = y), size=2) +
+    geom_label_repel(aes(x = x, y = y, label = LETTERS[2:18]),
+                     box.padding   = 0.35, 
+                     point.padding = 0.5,
+                     segment.color = 'grey50') +
+    labs(x = "wild sample", y = "lab-reared sample") +
+    theme(legend.position = "none",
+          # plot.title = element_text(size = 19, hjust = 0.5),
+          axis.title = element_text(size = 14),
+          axis.text = element_text(size=10),
+          axis.ticks = element_line(size = 0.7),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2))
+```
+
+\
+
+We defined a regression model with measurement error in x an y using Stan.
+
+```{stan output.var="err_in_var", eval=FALSE}
+// The input data are vectors 'x', 'sd_x', 'y' and 'sd_y' of length 'N'.
+data {
+  int<lower=0> N;
+  vector[N] x;
+  vector<lower=0>[N] sd_x;
+  vector[N] y;
+  vector<lower=0>[N] sd_y;
+}
+
+// The parameters accepted by the model.
+parameters {
+  vector[N] x_lat;
+  vector[N] y_lat;
+  real alpha;
+  real beta;
+  real<lower=0> sigma;
+}
+
+transformed parameters {
+  vector[N] mu_yhat = alpha + beta * x_lat;
+}
+
+// The model to be estimated. We model the output
+// 'y_lat' to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
+// and standard deviation 'sigma'.
+model {
+  x_lat ~ normal(0., 100.);
+  alpha ~ normal(0., 5.);
+  beta ~ normal(1., 5.);
+  sigma ~ normal(0., 10.);
+  
+  x ~ normal(x_lat, sd_x);
+  y_lat ~ normal(mu_yhat, sigma);
+  y ~ normal(y_lat, sd_y);
+}
+```
+
+
+

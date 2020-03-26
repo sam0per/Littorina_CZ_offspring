@@ -35,9 +35,9 @@ transformed parameters {
 // and standard deviation 'sigma_y'.
 model {
   x_lat ~ normal(0., 100.);
-  alpha ~ normal(0., 5.);
-  beta ~ normal(1., 5.);
-  sigma ~ normal(0., 10.);
+  alpha ~ normal(0., 2.);
+  beta ~ normal(1., 2.);
+  sigma ~ normal(0., 5.);
   
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);

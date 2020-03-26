@@ -1,4 +1,4 @@
-.packages = c("optparse", "dplyr", "tidyr", "rstan", "shinystan")
+.packages = c("optparse", "dplyr", "tidyr", "rstan", "shinystan", "xtable")
 
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
@@ -104,3 +104,12 @@ saveRDS(err_in_var, paste0(res_dir, "models/err_in_var.rds"))
 # err_in_var = readRDS(paste0(res_dir, "models/err_in_var.rds"))
 
 # launch_shinystan(err_in_var)
+
+print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
+
+# postd = extract(err_in_var)
+# names(postd)
+# dim(postd$alpha)
+
+stbl = rstan::summary(err_in_var)
+xtable::xtable(stbl)
