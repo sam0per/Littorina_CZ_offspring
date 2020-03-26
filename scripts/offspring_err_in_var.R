@@ -100,8 +100,8 @@ options(mc.cores = 4)
 dat = list(N = nrow(x_meas), x = x_meas$scaled_mean_thickness, sd_x = x_meas$scaled_sd_mean_thickness,
            y = y_meas$scaled_mean_thickness, sd_y = y_meas$scaled_sd_mean_thickness)
 err_in_var = rstan::stan(file = stanfile,
-                         data = dat, iter = 8000, warmup = 2000,
-                         chains=4, refresh=8000)
+                         data = dat, iter = 12000, warmup =4000,
+                         chains=4, refresh=12000)
 dir.create(paste0(island, "_off_SW/", island, "_off_results"))
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 dir.create(paste0(res_dir, "models"))
@@ -110,7 +110,7 @@ saveRDS(err_in_var, paste0(res_dir, "models/err_in_var.rds"))
 # err_in_var = readRDS(paste0(res_dir, "models/err_in_var.rds"))
 
 # launch_shinystan(err_in_var)
-
+# pairs(err_in_var)
 print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 
 # postd = extract(err_in_var)
@@ -118,5 +118,5 @@ print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 # dim(postd$alpha)
 
 stbl = rstan::summary(err_in_var)
-str(stbl)
+xtable::xtable(stbl$summary)
 # xtable::xtable(stbl)
