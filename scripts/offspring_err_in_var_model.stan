@@ -23,7 +23,7 @@ parameters {
   vector[N] y_lat;
   real alpha;
   real beta;
-  real<lower=0> sigma;
+  vector<lower=0>[N] sigma;
 }
 
 transformed parameters {

@@ -192,3 +192,5 @@ pairs(err_in_var, pars = pars, include = TRUE)
 \
 
 Divergent transitions increase when the prior ranges are reduced.
+
+The alternative is to try a mixed model with by population random effect.
