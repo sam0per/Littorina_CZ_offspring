@@ -83,6 +83,7 @@ y_meas[, paste0("scaled_sd_", cz_phen)] = y_meas$x[,"sd"] / sd(y_meas$x[, "mean"
 # sd(x_meas$x)
 
 (diff_pop = setdiff(x_meas$pop, y_meas$pop))
+cat("Population(s)", diff_pop, "will be excluded.")
 x_meas = x_meas[x_meas$pop!=diff_pop,]
 
 diff_ypop = which(apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
@@ -117,4 +118,5 @@ print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 # dim(postd$alpha)
 
 stbl = rstan::summary(err_in_var)
-xtable::xtable(stbl)
+str(stbl)
+# xtable::xtable(stbl)
