@@ -34,10 +34,10 @@ transformed parameters {
 // 'y_lat' to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
 // and standard deviation 'sigma'.
 model {
-  x_lat ~ normal(0, 50);
-  alpha ~ normal(0, 50);
-  beta ~ normal(1, 50);
-  sigma ~ cauchy(0., 25);
+  x_lat ~ normal(0, 10);
+  alpha ~ normal(0, 10);
+  beta ~ normal(1, 10);
+  sigma ~ cauchy(0, 10);
   
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);
