@@ -18,6 +18,7 @@ data {
 // The parameters accepted by the model.
 parameters {
   vector[N] x_lat;
+  vector[N] y_lat;
   real alpha;
   real beta;
   real<lower=0> sigma;
@@ -31,7 +32,7 @@ transformed parameters {
 // 'y_lat' to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
 // and standard deviation 'sigma'.
 model {
-  x_lat ~ normal(0, 10);
+  //x_lat ~ normal(0, 10);
   alpha ~ normal(0, 10);
   beta ~ normal(1, 10);
   sigma ~ cauchy(0., 10);
