@@ -3,16 +3,15 @@ title: "Plasticity - Littorina offspring"
 author: "Samuel"
 date: "3/25/2020"
 output:
-  word_document: default
   html_document:
     fig_caption: yes
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-.packages = c("optparse", "dplyr", "tidyr", "rstan", "shinystan", "knitr", "kableExtra", "ggrepel",
-              "flextable", "officer")
+.packages = c("optparse", "dplyr", "tidyr", "rstan", "shinystan", "knitr", "kableExtra", "ggrepel")
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
 if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
@@ -33,82 +32,76 @@ dat_off[, "generation"] = 1
 dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
 
 dat_gen0 = dat_off[dat_off$generation==0, c("pop", "ID", cz_phen)]
+dat_gen0[, paste0("scaled_", cz_phen)] = (dat_gen0$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
+
+x_meas = aggregate(x = dat_gen0[, cz_phen], by = list(pop = dat_gen0$pop),
+                   FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+# mean(dat_gen0[dat_gen0$pop=="B", cz_phen], na.rm = TRUE)
+# sd(dat_gen0[dat_gen0$pop=="B", cz_phen], na.rm = TRUE)
+x_meas[, paste0("scaled_", cz_phen)] = scale(x_meas$x[,"mean"])[,1]
+x_meas[, paste0("scaled_sd_", cz_phen)] = x_meas$x[,"sd"] / sd(x_meas$x[, "mean"])
+# xtable::xtable(x = cbind(Pop = x_meas$pop, round(x_meas$x, 2), scaled_mean_thickness = round(x_meas$scaled_mean_thickness, 2),
+#                          scaled_sd_thickness = round(x_meas$scaled_sd_mean_thickness, 2)))
+# mean(x_meas$x)
+# sd(x_meas$x)
 
 dat_gen1 = dat_off[dat_off$generation==1, c("pop", "ID", cz_phen)]
-diff_ypop = apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
-                  FUN = function(x) !grepl(pattern = "x", x = x))
-diff_ypop_idx = which(apply(diff_ypop, MARGIN = 1, FUN = sum)==2)
-dat_gen1 = dat_gen1[diff_ypop_idx, ]
-
-diff_pop = setdiff(dat_gen0$pop, dat_gen1$pop)
-dat_gen0 = dat_gen0[dat_gen0$pop!=diff_pop,]
-
-# table(dat_gen0$pop)
 # table(dat_gen1$pop)
-# x_meas = aggregate(x = dat_gen0[, cz_phen], by = list(pop = dat_gen0$pop),
-#                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
-# x_meas = aggregate(x = dat_gen0[, cz_phen], by = list(pop = dat_gen0$pop),
-#                    FUN = function(x) {
-#                      (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)})
-
-# x_test = dat_gen0[dat_gen0$pop=='C', cz_phen] - mean(dat_gen0[dat_gen0$pop=='C', cz_phen], na.rm = TRUE)
-# identical(x_meas[[3]], x_test)
-dat_gen0[, paste0("scaled_", cz_phen)] = (dat_gen0$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
-x_meas = aggregate(x = dat_gen0[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen0$pop),
-                   FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
-
-
-dat_gen1[, paste0("scaled_", cz_phen)] = (dat_gen1$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
-y_meas = aggregate(x = dat_gen1[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen1$pop),
+# mean(dat_gen1[dat_gen1$pop=="B", cz_phen], na.rm = TRUE)
+y_meas = aggregate(x = dat_gen1[, cz_phen], by = list(pop = dat_gen1$pop),
                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
-# y_meas = y_meas[complete.cases(y_meas), ]
-# y_means_idx = which(lapply(y_meas$x, length)!=1)
-# y_meas = y_meas[y_means_idx, ]
-# y_meas[, paste0("scaled_", cz_phen)] = scale(y_meas$x[,"mean"])[,1]
-# y_meas[, paste0("scaled_sd_", cz_phen)] = y_meas$x[,"sd"] / sd(y_meas$x[, "mean"])
-# as.data.frame(y_meas$x)
+y_meas = y_meas[complete.cases(y_meas), ]
+y_meas[, paste0("scaled_", cz_phen)] = scale(y_meas$x[,"mean"])[,1]
+y_meas[, paste0("scaled_sd_", cz_phen)] = y_meas$x[,"sd"] / sd(y_meas$x[, "mean"])
+
+diff_pop = setdiff(x_meas$pop, y_meas$pop)
+x_meas = x_meas[x_meas$pop!=diff_pop,]
+# diff_ypop = setdiff(unique(dat_gen1$pop), y_meas$pop)
+diff_ypop = which(apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
+                        FUN = function(x) !grepl(pattern = "x", x = x)))
+dat_gen1 = dat_gen1[diff_ypop, ]
 ```
 
-For each sample $i$ of population $j$ in both generations, scaling was accomplished by substracting from the individual phenotype value the total mean phenotype and dividing by the total $SD$ phenotype of generation zero (parents). Total meaning generation zero (parents) across all populations.
+For each sample $i$ in both generations scaling was accomplished by substracting from the individual phenotype value the total mean phenotype and dividing by the total $SD$ phenotype of generation zero.
 
-$\hat{x_{ij}} = \frac{x_{ij} - \overline{x_{t}}}{\sigma_{x_{t}}}.$
+\begin{equation}
+    \hat{x_i} = \frac{x_i - \overline{x_t}}{\sigma_{xt}}.
+\end{equation}
 
-$\hat{y_{ij}} = \frac{y_{ij} - \overline{x_{t}}}{\sigma_{x_{t}}}.$
+\begin{equation}
+    \hat{y_i} = \frac{y_i - \overline{x_t}}{\sigma_{xt}}.
+\end{equation}
 
-where $x_{ij}$ and $y_{ij}$ is the phenotype value of sample $i$ of population $j$ in the parental and offspring generations, respectively. Total mean of parents across all populations is $\overline{x_t}$ and total $SD$ is referred as $\sigma_{xt}$. Then, for each parental and offspring population, we calculated mean and $SD$ and used these measures as input for the regression model (Table 1; Fig. 1).
+where $x$ and $y$ is the phenotype value of sample $i$ in the parental and offspring populations, respectively. Scaled variables are marked with the symbol $\hat{}$, total mean of parents is $\overline{x_t}$, and total $SD$ of parents is referred as $\sigma_{xt}$. Then, for each parental and offspring population, we calculated mean and $SD$ and used these measures as input for the regression model.
 
+```{r tables, echo=FALSE}
+tb1 = cbind(data.frame(table(dat_gen0$pop)[-1]), x_meas$x, x_meas$scaled_mean_thickness, x_meas$scaled_sd_mean_thickness)
+colnames(tb1) = c("Pop", "Count", "Mean thick", "SD thick", "Scaled mean", "Scaled SD")
+kable(tb1, caption = "Table 1. Observed data for parental populations.",
+      digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 
-```{r, echo=FALSE}
-tbl1 = data.frame(cbind(x_meas$x, y_meas$x))
-if (length(strsplit(cz_phen, split = "_")[[1]])>1) {
-  phen_h = strsplit(cz_phen, split = "_")[[1]][2]
-} else {
-  phen_h = cz_phen
-}
-var_h = c("mean", "sd")
-gen_h = c("(P)", "(O)")
-
-colnames(tbl1) = c(paste("scaled", var_h[1], phen_h, gen_h[1]), paste("scaled", var_h[2], phen_h, gen_h[1]),
-                   paste("scaled", var_h[1], phen_h, gen_h[2]), paste("scaled", var_h[2], phen_h, gen_h[2]))
-autofit(flextable(tbl1))
-# autofit(flextable(as.data.frame(y_meas$x)))
+tb2 = cbind(data.frame(table(dat_gen1$pop)), y_meas$x, y_meas$scaled_mean_thickness, y_meas$scaled_sd_mean_thickness)
+colnames(tb2) = colnames(tb1)
+kable(tb2, caption = "Table 2. Observed data for offspring populations.",
+      digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 ```
 
-
-```{r figs, echo=FALSE, dpi=300, fig.height=2, fig.width=3, fig.cap="Figure 1. Scatter plot of the scaled data."}
-ggplot(data = tbl1) +
+```{r figs, echo=FALSE, fig.cap="Figure 1. Scatter plot of the scaled data."}
+ggplot(data = data.frame(x = x_meas$scaled_mean_thickness, y = y_meas$scaled_mean_thickness)) +
     geom_abline(slope = 1, linetype="dashed") +
-    geom_point(aes(x = tbl1[, 1], y = tbl1[, 3]),
-               size=1) +
-    geom_label_repel(aes(x = tbl1[, 1], y = tbl1[, 3], label = LETTERS[2:18]),
-                     size = 2, box.padding = 0.2, label.padding = 0.15, segment.colour = "black",
-                     min.segment.length = 0.1) +
+    geom_point(aes(x = x, y = y), size=2) +
+    geom_label_repel(aes(x = x, y = y, label = LETTERS[2:18]),
+                     box.padding   = 0.35, 
+                     point.padding = 0.5,
+                     segment.color = 'grey50') +
     labs(x = "wild sample", y = "lab-reared sample") +
     theme(legend.position = "none",
           # plot.title = element_text(size = 19, hjust = 0.5),
-          axis.title = element_text(size = 8),
-          axis.text = element_text(size=5),
-          axis.ticks = element_line(size = 0.5),
+          axis.title = element_text(size = 14),
+          axis.text = element_text(size=10),
+          axis.ticks = element_line(size = 0.7),
           panel.background = element_blank(),
           panel.border = element_rect(colour = "black", fill=NA, size=0.5),
           axis.line = element_line(size = 0.2, linetype = "solid",
@@ -185,9 +178,15 @@ Another alternative would be to try a mixed model with by population random effe
 
 Since we standardized the data we know that $\alpha$ should be centered near 0 and $\beta$ near 1 (Table 3). We would also expect the fitted values to fall onto the 1:1 line (Fig. 3).
 
-```{r sfigs, echo=FALSE, fig.cap="Figure 3. Scatter plot of the scaled data with fitted values."}
+```{r stables, echo=FALSE}
 stbl = read.csv(file = paste0("../../", res_dir, "tables/", island, "_err_in_var_stanfit.csv"))
 pars_idx = which(as.character(stbl$X) %in% pars)
+kable(stbl[pars_idx, ], caption = "Table 3. Stan parameter estimates.",
+      digits = 3, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+```{r sfigs, echo=FALSE, fig.cap="Figure 3. Scatter plot of the scaled data with fitted values."}
 new_x_rng = range(stbl[grepl(pattern = "x_lat", x = as.character(stbl$X)), "mean"])
 new_x = runif(n = 1000, min = new_x_rng[1], max = new_x_rng[2])
 new_mu_yhat = stbl[pars_idx, "mean"][1] + stbl[pars_idx, "mean"][2] * new_x
@@ -198,24 +197,23 @@ new_mu_yhat = stbl[pars_idx, "mean"][1] + stbl[pars_idx, "mean"][2] * new_x
 
 sfitted = data.frame(x_lat_mean = new_x, mu_yhat_mean = new_mu_yhat)
 
-ggplot(data = tbl1) +
+ggplot(data = data.frame(x = x_meas$scaled_mean_thickness, y = y_meas$scaled_mean_thickness)) +
     geom_abline(slope = 1, linetype="dashed") +
-    geom_point(aes(x = tbl1[, 1], y = tbl1[, 3]),
-               size=1) +
-    geom_line(data = sfitted, aes(x = x_lat_mean, y = mu_yhat_mean), size=0.5, col="red") +
-    geom_label_repel(aes(x = tbl1[, 1], y = tbl1[, 3], label = LETTERS[2:18]),
-                     size = 2, box.padding = 0.2, label.padding = 0.15, segment.colour = "black",
-                     min.segment.length = 0.1) +
+    geom_point(aes(x = x, y = y), size=2) +
+    geom_line(data = sfitted, aes(x = x_lat_mean, y = mu_yhat_mean), size=1, col="red") +
+    geom_label_repel(aes(x = x, y = y, label = LETTERS[2:18]),
+                     box.padding   = 0.35, 
+                     point.padding = 0.5,
+                     segment.color = 'grey50') +
     labs(x = "wild sample", y = "lab-reared sample") +
     theme(legend.position = "none",
           # plot.title = element_text(size = 19, hjust = 0.5),
-          axis.title = element_text(size = 8),
-          axis.text = element_text(size=5),
-          axis.ticks = element_line(size = 0.5),
+          axis.title = element_text(size = 14),
+          axis.text = element_text(size=10),
+          axis.ticks = element_line(size = 0.7),
           panel.background = element_blank(),
           panel.border = element_rect(colour = "black", fill=NA, size=0.5),
           axis.line = element_line(size = 0.2, linetype = "solid",
                                    colour = "black"),
           panel.grid = element_line(colour = "gray70", size = 0.2))
-
 ```
