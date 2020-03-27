@@ -75,8 +75,7 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = 4)
 # options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
 
-dat = list(N = nrow(x_meas$x), x = x_meas$x[, 'mean'], sd_x = x_meas$x[,"sd"],
-           y = y_meas$x[, 'mean'], sd_y = y_meas$x[,"sd"])
+dat = list(N = nrow(x_meas$x), x = x_meas$x[, 'mean'], sd_x = x_meas$x[,"sd"])
 err_in_var = rstan::stan(file = stanfile,
                          data = dat, iter = 12000, warmup =4000,
                          chains=4, refresh=12000,
