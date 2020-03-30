@@ -79,7 +79,7 @@ dat = list(N = nrow(x_meas$x), x = x_meas$x[, 'mean'], sd_x = x_meas$x[,"sd"])
 err_in_var = rstan::stan(file = stanfile,
                          data = dat, iter = 12000, warmup =4000,
                          chains=4, refresh=12000,
-                         control = list(stepsize=0.01, adapt_delta = 0.99))
+                         control = list(stepsize = 0.01, adapt_delta = 0.99, max_treedepth = 15))
 dir.create(paste0(island, "_off_SW/", island, "_off_results"))
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 dir.create(paste0(res_dir, "models"))

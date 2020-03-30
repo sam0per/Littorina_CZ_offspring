@@ -35,7 +35,7 @@ model {
   //x_lat ~ normal(0, 10);
   alpha ~ normal(0, 5);
   beta ~ normal(1, 5);
-  sigma ~ cauchy(0., 5);
+  sigma ~ cauchy(0, 2);
   
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);
