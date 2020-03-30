@@ -40,4 +40,3 @@ model {
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);
 }
-
