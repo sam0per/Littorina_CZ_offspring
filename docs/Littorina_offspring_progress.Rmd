@@ -53,14 +53,15 @@ y_meas = aggregate(x = dat_gen1[, paste0("scaled_", cz_phen)], by = list(pop = d
                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
 ```
 
-For each sample $i$ of population $j$ in both generations (parents and offspring), scaling was accomplished by substracting from the individual phenotype value the total mean phenotype and dividing by the total $SD$ phenotype of generation zero (parents). Total meaning generation zero (parents) across all populations.
+For each sample $i$ of population $j$ in both generations (parents and offspring), scaling was accomplished by substracting from the individual phenotype value the total mean phenotype and dividing by the total $SD$ phenotype. Total meaning generation zero (parents) across all populations.
 
 $\hat{x_{ij}} = \frac{x_{ij} - \overline{x_{T}}}{\sigma_{x_{T}}}.$
 
 $\hat{y_{ij}} = \frac{y_{ij} - \overline{x_{T}}}{\sigma_{x_{T}}}.$
 
-where $x_{ij}$ and $y_{ij}$ is the phenotype value of sample $i$ of population $j$ in the parental and offspring generations, respectively. Total mean of parents across all populations is $\overline{x_T}$ and total $SD$ is referred as $\sigma_{x_T}$. Then, for each parental and offspring population, we calculated mean and $SD$ and used these measures as input for the regression model (Table 1; Fig. 1).
+where $x_{ij}$ and $y_{ij}$ is the phenotype value of sample $i$ in population $j$ of the parental and offspring generations, respectively. Total mean of parents across all populations is $\overline{x_T}$ and their total $SD$ is referred as $\sigma_{x_T}$. Then, within each parental and offspring population, we calculated mean and $SD$ and used these measures as input for the regression model (Table 1; Fig. 1).
 
+\
 
 ```{r tbl1, echo=FALSE}
 tbl1 = data.frame(cbind(x_meas$x, y_meas$x))
@@ -74,10 +75,16 @@ gen_h = c("(P)", "(O)")
 
 colnames(tbl1) = c(paste("scaled", var_h[1], phen_h, gen_h[1]), paste("scaled", var_h[2], phen_h, gen_h[1]),
                    paste("scaled", var_h[1], phen_h, gen_h[2]), paste("scaled", var_h[2], phen_h, gen_h[2]))
-autofit(flextable(tbl1))
-# autofit(flextable(as.data.frame(y_meas$x)))
+set_caption(autofit(flextable(tbl1)), "Table 1. Mean and stadard deviation of scaled phenotype of parents (P) and offspring (O).")
 ```
 
+\
+
+Mean and $SD$ of `r colnames(tbl1)[1]` =  `r mean(tbl1[, 1])` and  `r sd(tbl1[, 1])`.
+
+Mean and $SD$ of `r colnames(tbl1)[3]` =  `r mean(tbl1[, 3])` and  `r sd(tbl1[, 3])`.
+
+\
 
 ```{r fig1, echo=FALSE, dpi=300, fig.height=2, fig.width=3, fig.cap="Figure 1. Scatter plot of the scaled data."}
 ggplot(data = tbl1) +
@@ -104,7 +111,7 @@ ggplot(data = tbl1) +
 
 We defined a regression model with measurement error in x an y using Stan.
 
-```{stan output.var="err_in_var", eval=FALSE}
+```{stan output.var="err_in_var", eval=FALSE, include=FALSE}
 // The input data are vectors 'x' and 'sd_x' of length 'N'.
 data {
   int<lower=0> N;
@@ -139,19 +146,22 @@ model {
 }
 ```
 
-There were warning messages when using $\sigma_{x_{T}}$ after scaling:
+```{r, echo=FALSE}
+# There were warning messages when using $\sigma_{x_{T}}$ after scaling:
+# 
+# 1: There were 59 divergent transitions after warmup. Increasing adapt_delta above 0.99 may help. See http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+# 
+# 2: There were 8059 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See
+# http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded
+# 
+# 3: There were 4 chains where the estimated Bayesian Fraction of Missing Information was low. See
+# http://mc-stan.org/misc/warnings.html#bfmi-low
+# 
+# We can examine the Stan output to diagnose the above sampling problems (Fig. 2) and also look at the parameter estimate for _sigma_ (Table 2).
+```
 
-1: There were 59 divergent transitions after warmup. Increasing adapt_delta above 0.99 may help. See http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
 
-2: There were 8059 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See
-http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded
-
-3: There were 4 chains where the estimated Bayesian Fraction of Missing Information was low. See
-http://mc-stan.org/misc/warnings.html#bfmi-low
-
-We can examine the Stan output to diagnose the above sampling problems (Fig. 2) and also look at the parameter estimate for _sigma_ (Table 2).
-
-```{r fig2, echo=FALSE, fig.cap="Figure 2. Divergent transitions diagnosis."}
+```{r fig2, echo=FALSE, fig.cap="Figure 2. Divergent transitions diagnosis.", eval=FALSE}
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 pars = c("alpha", "beta", "sigma")
 err_in_var = readRDS(paste0("../../", res_dir, "models/", island, "_err_in_var.rds"))
@@ -163,22 +173,23 @@ pairs(err_in_var, pars = pars, include = TRUE)
 
 \
 
-```{r tbl2, echo=FALSE}
+```{r tbl2, echo=FALSE, eval=FALSE}
 stbl = read.csv(file = paste0("../../", res_dir, "tables/", island, "_err_in_var_stanfit.csv"))
 pars_idx = which(as.character(stbl$X) %in% pars)
 tbl2 = round(stbl[pars_idx, -1], 2)
 autofit(flextable(data = cbind(par = stbl[pars_idx, 1], tbl2)))
+
+# \
+# 
+# Another alternative would be to try a mixed model with by population random effect.
+# 
+# \
+# 
+# Since we standardized the data we know that $\alpha$ should be centered near 0 and $\beta$ near 1 (Table 2). We would also expect the fitted values to fall onto the 1:1 line (Fig. 3).
 ```
 
-\
 
-Another alternative would be to try a mixed model with by population random effect.
-
-\
-
-Since we standardized the data we know that $\alpha$ should be centered near 0 and $\beta$ near 1 (Table 2). We would also expect the fitted values to fall onto the 1:1 line (Fig. 3).
-
-```{r fig3, echo=FALSE, fig.cap="Figure 3. Scatter plot of the scaled data with fitted values."}
+```{r fig3, echo=FALSE, fig.cap="Figure 3. Scatter plot of the scaled data with fitted values.", eval=FALSE}
 new_x_rng = range(stbl[grepl(pattern = "x_lat", x = as.character(stbl$X)), "mean"])
 new_x = runif(n = 1000, min = new_x_rng[1], max = new_x_rng[2])
 new_mu_yhat = stbl[pars_idx, "mean"][1] + stbl[pars_idx, "mean"][2] * new_x
