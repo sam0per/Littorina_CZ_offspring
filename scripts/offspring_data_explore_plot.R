@@ -247,7 +247,7 @@ lapply(1:length(phen_fl), function(x) {
 ############################
 ######## dissections #######
 ############################
-island = "CZD"
+island = "CZA"
 cz_gen = "gen1"
 cz_phen = "dissections"
 if (island=="CZA") {
@@ -279,6 +279,9 @@ lapply(phen_dt, ncol)
 lapply(phen_dt, colnames)
 lapply(phen_dt, summary)
 lapply(phen_dt, str)
+lapply(phen_dt, function(b) table(b[, 'broodpouch']))
+lapply(phen_dt, function(b) table(b[, 'penis']))
+lapply(phen_dt, function(b) table(b[, 'notes']))
 #### identify sex of each snail, using brood pouch and penis data ####
 sex <- function(b, p, isl) {
   if (isl=="CZD" & cz_gen=="gen0") {
@@ -288,11 +291,13 @@ sex <- function(b, p, isl) {
   } else {
     if(b=="Y" & p=="N" & (is.na(b)==F)) y <- "female"
     if(b=="N" & p=="Y" & (is.na(b)==F)) y <- "male"
-    if((b %in% c("Y", "N"))==F | (p %in% c("Y", "N"))==F | b==p) y<-"NA"
+    if(b=="N" & p=="small" & (is.na(b)==F)) y <- "immature"
+    if(b=="N" & p=="N" & (is.na(b)==F) & (is.na(p)==F)) y <- "juvenile"
+    if((b %in% c("Y", "N"))==F | (p %in% c("Y", "N", "small"))==F) y<-"NA"
   }
   return(y)
 }
-# sex(b = "Y", p = "Y", isl = "CZD")
+# sex(b = "Y", p = "small", isl = "CZA")
 # island="CZD"
 phen_sex = lapply(1:length(phen_fl), function(i) {
   if (island=="CZD" & cz_gen=="gen0") {
@@ -308,7 +313,7 @@ phen_sex = lapply(1:length(phen_fl), function(i) {
     dt_nona = dt_nona[dt_nona[, "parasites"]!="Y", ]
   } else {
     if (i==1) {
-      dt_nona = dt_nona[dt_nona[, "broodpouch"]=="Y", ]
+      dt_nona = dt_nona[dt_nona[, "sexontube"]==FALSE, ]
       dt_nona = dt_nona[dt_nona[, "parasites"]!="Y", ]
     } else if (i==2) {
       dt_nona = dt_nona[dt_nona[, "sexontube"]=="M", ]
@@ -320,6 +325,8 @@ phen_sex = lapply(1:length(phen_fl), function(i) {
 lapply(phen_sex, head)
 lapply(phen_sex, nrow)
 lapply(phen_sex, summary)
+lapply(phen_sex, colnames)
+lapply(phen_sex, function(b) names(table(b[, 'notes'])))
 
 # write result to file
 (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
@@ -333,13 +340,30 @@ lapply(1:length(phen_fl), function(x) {
   dir.create(nu_phen_dir)
   write.csv(phen_sex[[x]], paste0(nu_phen_dir, "/", basename(nu_phen_fl), "_", cdate, ".csv"), row.names = FALSE)
 })
+# Change from juvenile to immature in excel using notes
 
 # rm(list = ls())
+##########
+## size ##
+##########
+one_phen = "size"
+len_dt = read.xls(xls = "CZA_off_SW/CZA_off_raw_data_renamed/CZoff_length_size_sample1_201501.xlsx", sheet = 1)
+size_dt = read.xls(xls = "CZA_off_SW/CZA_off_raw_data_renamed/CZoff_sample1_size.xlsx", sheet = 1)
+if (identical(len_dt$Size.mm, size_dt$Size.mm)) {
+  colnames(len_dt) = c("snail_ID", "size_mm", "notes", "date")
+  write.csv(len_dt, file = "CZA_off_SW/CZA_off_final_data/CZA_off_offspring_100_size_mm.csv", quote = FALSE, row.names = FALSE)
+}
 #################################
 ######## merge phenotypes #######
+# sex was added in excel for size
+# and PCs dataset of generation 0
+# parents
+# juvenile was added in excel for
+# size dataset of generation 1
+# offspring 100
 #################################
 island = "CZA"
-phenos = c("boldness", "dissections", "thickness", "weight")
+phenos = c("boldness", "dissections", "thickness", "weight", "size", "PCs")
 # cz_gen = "gen1"
 if (island=="CZA") {
   dat_dir = "CZA_off_SW/CZA_off_final_data"
@@ -358,12 +382,13 @@ phen_dt = lapply(1:length(phenos), function(x) {
     read.csv(file = phen_fl[[x]][y])
   })
 })
-
+lapply(phen_dt, length)
 phen_all = lapply(1:length(phenos), function(x) {
   phen_merged = Reduce(function(...) merge(..., all=TRUE), phen_dt[[x]])
   phen_merged[, "snail_ID"] = as.character(phen_merged[, "snail_ID"])
   return(phen_merged)
 })
+# phen_all[[6]]
 lapply(phen_all, head)
 lapply(phen_all, colnames)
 lapply(phen_all, nrow)
@@ -373,6 +398,26 @@ head(phen_all_dt)
 colnames(phen_all_dt)
 colnames(phen_all_dt)[which(colnames(phen_all_dt)=="score")] = "bold_score"
 sum(grepl(pattern = "snail_ID", x = colnames(phen_all_dt)))
+sum(grepl(pattern = "sex", x = colnames(phen_all_dt)))
+sex_col = colnames(phen_all_dt)[(grepl(pattern = "sex", x = colnames(phen_all_dt)))]
+
+sex_dt = phen_all_dt[, sex_col]
+apply(X = sex_dt, MARGIN = 2, FUN = function(x) table(x))
+# sex_dt$sex.x
+sex_miss = apply(X = sex_dt, MARGIN = 2, FUN = function(x) {
+  x = as.character(x)
+  x[is.na(x)] <- "missing"
+  return(x)
+})
+apply(X = sex_miss, MARGIN = 2, FUN = function(x) table(x))
+# which(sex_miss[, 4]=="missing")
+# which(sex_miss[, 3]=="missing")
+comp_with = 3
+sex_diff = setdiff(which(sex_miss[, 4]=="missing"), which(sex_miss[, comp_with]=="missing"))
+sex_miss[sex_diff, 4] = sex_miss[sex_diff, comp_with]
+
+phen_all_dt$sex = sex_miss[, 4]
+phen_all_dt[phen_all_dt$sex=='missing', ]
 
 (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
 if (exists("cz_gen")) {
@@ -381,18 +426,30 @@ if (exists("cz_gen")) {
   write.csv(phen_all_dt, file = paste0(dat_dir, "/", island, "_off_all_phenos_", cdate, ".csv"), row.names = FALSE)
 }
 
+odate = "20200402"
+foo = read.csv(paste0(dat_dir, "/", island, "_off_all_phenos_main_", odate, ".csv"))
+
 # foo = read.csv("CZA_off_SW/CZA_off_final_data/CZA_off_all_phenos_main_20191216.csv")
 # colnames(foo)
-# kcol = intersect(colnames(phen_all_dt), colnames(foo))
-# mdt = phen_all_dt[, which(colnames(phen_all_dt) %in% kcol)]
+(kcol = c(intersect(colnames(phen_all_dt), colnames(foo)), "size_mm", "PC1", "PC2"))
+mdt = phen_all_dt[, which(colnames(phen_all_dt) %in% kcol)]
 # head(mdt)
 # 
 # (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
-# if (exists("cz_gen")) {
-#   write.csv(mdt, file = paste0(dat_dir, "/", island, "_off_", cz_gen,"_all_phenos_main_", cdate, ".csv"), row.names = FALSE)
-# } else {
-#   write.csv(mdt, file = paste0(dat_dir, "/", island, "_off_all_phenos_main_", cdate, ".csv"), row.names = FALSE)
-# }
+if (exists("cz_gen")) {
+  write.csv(mdt, file = paste0(dat_dir, "/", island, "_off_", cz_gen,"_all_phenos_main_", cdate, ".csv"), row.names = FALSE, quote = FALSE)
+} else {
+  write.csv(mdt, file = paste0(dat_dir, "/", island, "_off_all_phenos_main_", cdate, ".csv"), row.names = FALSE, quote = FALSE)
+}
+
+levels(mdt$size_mm)
+is.numeric(mdt$size_mm)
+# sum(dat_off$size_mm==" but that heavy...?", na.rm = TRUE)
+# sum(dat_off$size_mm=="", na.rm = TRUE)
+# which(dat_off$size_mm==" but that heavy...?")
+# which(dat_off$size_mm=="")
+# dat_off[1650, ]
+# dat_off[1651, ]
 
 # rm(list = ls())
 #######################

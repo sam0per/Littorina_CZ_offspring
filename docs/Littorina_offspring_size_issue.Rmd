@@ -1,0 +1,164 @@
+---
+title: "Plasticity in Littorina offspring, the size issue"
+author: "Samuel"
+date: "4/2/2020"
+output:
+  word_document: default
+  html_document:
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+.packages = c("optparse", "dplyr", "tidyr", "knitr", "kableExtra", "ggrepel",
+              "flextable", "officer", "ggcorrplot")
+# Install CRAN packages (if not already installed)
+.inst <- .packages %in% installed.packages()
+if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
+# Load packages into session
+lapply(.packages, require, character.only=TRUE)
+island = "CZA"
+```
+
+For now, the data and results belong to the island `r island`.
+
+\
+
+```{r, echo=FALSE, warning=FALSE}
+# cz_phen = "mean_thickness"
+dat_dir = paste0(island, "_off_SW/", island, "_off_final_data/")
+dat_off = read.csv(file = paste0("../../",dat_dir, island, "_off_all_phenos_main_20200403.csv"))
+dat_off = separate(data = dat_off, col = "snail_ID", into = c("pop", "ID"), sep = "_")
+ID_ch = table(nchar(as.character(dat_off$ID)))
+dat_check = lapply(1:length(ID_ch), function(x) {
+  idx = which(nchar(as.character(dat_off$ID))==names(ID_ch)[x])
+  dat_off[idx, ]
+})
+dat_off = dat_off[-1008, ]
+dat_off[, "generation"] = 1
+dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
+
+dat_gen0 = dat_off[dat_off$generation==0, ]
+
+dat_gen1 = dat_off[dat_off$generation==1, ]
+diff_ypop = apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
+                  FUN = function(x) !grepl(pattern = "x", x = x))
+diff_ypop_idx = which(apply(diff_ypop, MARGIN = 1, FUN = sum)<2)
+# dat_gen1[diff_ypop_idx, ]
+dat_gen1[diff_ypop_idx, "ID"] = substr(dat_gen1[diff_ypop_idx, "pop"], start = 2, stop = 4)
+dat_gen1[diff_ypop_idx, "pop"] = substr(dat_gen1[diff_ypop_idx, "pop"], start = 1, stop = 1)
+off_phen = c("bold_score", "mean_thickness", "weight_g", "PC1", "PC2")
+tbl1 = rbind(dat_gen0, dat_gen1)[, c(off_phen, "size_mm", "generation", "pop", "ID")]
+```
+
+\
+
+## Part one: Correlation and multicollinearity
+
+A plastic response to a change in the environment can be observed in one or more phenotypes. Ideally, we would like to understand to what extent each phenotype is plastic but in some (perhaps many) cases the plastic responses are not independent because the phenotypic values are correlated.  
+As expected, size, thickness and weight result to be highly correlated within generations (Fig. 1) and between generations (Fig. 2). One way to detect whether they are also collinear is to check the Choleski decomposition of the correlation matrix - if there is (multi)collinearity there will be some diagonal elements that are close to zero (Table 2). There is also another way to assess multicollinearity and that is by computing a score called the variance inflation factor (VIF), which measures how much the variance of a regression coefficient is inflated due to multicollinearity in the model. I have not exactly figured out how to implement this second test for multicollinearity to our case but, for example, if we consider the outcome variable $y$ to be the thickness of the offspring, then we can build a regression model with four predictors, thickness, weight, shape (PC2) and size of the parents, and calculate the VIF score after model fitting. Does it make sense?
+
+```{r fig1, echo=FALSE, eval=TRUE, include=TRUE, fig.cap="Figure 1. Scatter plots of the relationship between size and the other phenotypes in each generation separately.", fig.height=2, fig.width=3, warning=FALSE, dpi=300}
+lapply(seq_along(off_phen), function(x) {
+  ggplot(data = tbl1) +
+    facet_wrap(~generation) +
+    # geom_abline(slope = 1, linetype="dashed") +
+    geom_point(aes(x = size_mm, y = tbl1[, x]),
+               size=1) +
+    # geom_label_repel(aes(x = tbl1[, 1], y = tbl1[, 3], label = LETTERS[2:18]),
+    #                  size = 2, box.padding = 0.2, label.padding = 0.15, segment.colour = "black",
+    #                  min.segment.length = 0.1) +
+    labs(x = "size_mm", y = off_phen[x]) +
+    theme(legend.position = "none",
+          # plot.title = element_text(size = 19, hjust = 0.5),
+          axis.title = element_text(size = 8),
+          axis.text = element_text(size=5),
+          axis.ticks = element_line(size = 0.5),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2))
+})
+```
+
+\
+
+```{r fig2, echo=FALSE, fig.cap="Figure 2. Scatter plots of the relationship between size of the generation 1 offspring and the other phenotypes of generation 0 parents.", fig.height=2, fig.width=3, warning=FALSE, dpi=300, eval=FALSE, include=FALSE}
+gen0_phen = dat_gen0[, c(off_phen, "size_mm", "generation")]
+gen1_phen = dat_gen1[, c(off_phen, "size_mm", "generation")]
+lapply(seq_along(off_phen), function(x) {
+  ggplot(data = gen0_phen) +
+    # facet_wrap(~generation) +
+    # geom_abline(slope = 1, linetype="dashed") +
+    geom_point(aes(x = gen0_phen[, x], y = gen0_phen[, "size_mm"]),
+               size=0.5) +
+    # geom_label_repel(aes(x = tbl1[, 1], y = tbl1[, 3], label = LETTERS[2:18]),
+    #                  size = 2, box.padding = 0.2, label.padding = 0.15, segment.colour = "black",
+    #                  min.segment.length = 0.1) +
+    labs(x = paste0(off_phen[x], " (0)"), y = "size_mm (1)") +
+    theme(legend.position = "none",
+          # plot.title = element_text(size = 19, hjust = 0.5),
+          axis.title = element_text(size = 8),
+          axis.text = element_text(size=5),
+          axis.ticks = element_line(size = 0.5),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2))
+})
+```
+
+\
+
+```{r fig3, echo=FALSE, warning=FALSE, dpi=300, fig.height=6, fig.width=6, fig.cap="Figure 3. Correlation matrices.", eval=FALSE, include=FALSE}
+corr_m_0 <- round(cor(dat_gen0[, c(off_phen, "size_mm")], use = "pairwise.complete.obs"), 3)
+corr_m_1 <- round(cor(dat_gen1[, c(off_phen, "size_mm")], use = "pairwise.complete.obs"), 3)
+corr_m <- round(cor(tbl1[, c(off_phen, "size_mm")], use = "pairwise.complete.obs"), 3)
+
+ggcorrplot(corr_m_0, hc.order = TRUE, type = "lower", lab = TRUE)
+ggcorrplot(corr_m_1, hc.order = TRUE, type = "lower", lab = TRUE)
+ggcorrplot(corr_m, hc.order = TRUE, type = "lower", lab = TRUE)
+```
+
+\
+
+```{r tbl1, echo=FALSE, eval=FALSE, include=FALSE}
+coll_test_0 = chol(corr_m_0)
+set_caption(autofit(flextable(as.data.frame(coll_test_0))), "Table 1a. Choleski decomposition of the correlation matrix across generation 0 parents.")
+
+coll_test_1 = chol(corr_m_1)
+set_caption(autofit(flextable(as.data.frame(coll_test_1))), "Table 1b. Choleski decomposition of the correlation matrix across generation 1 offspring.")
+
+coll_test = chol(corr_m)
+set_caption(autofit(flextable(as.data.frame(coll_test))), "Table 1c. Choleski decomposition of the correlation matrix across all samples.")
+```
+
+\
+
+None of the diagonal elements are close to zero but the closest values are found in size, thickness and weight. Given these results, we can exclude mutlicollinearity and focus on the consequences of using highly correlated variables in the model. However, I am quite skeptical about the abscence of multicollinearity because in general, it is expected that an absolute correlation coefficient of $>0.9$ among two or more predictors indicates the presence of multicollinearity (Dohoo et al. 1997). Perhaps I am performing the Choleski decomposition of the correlation matrix on the wrong set of variables. What would you suggest?
+
+Dohoo, I., Ducrot, C., Fourichon, C., Donald, A. and Hurnik, D. (1997), “An overview of techniques for dealing with large numbers of independent variables in epidemiologic studies”, Preventive Veterinary Medicine, Vol. 29 No. 3, pp. 221-239.
+
+\
+
+## Part two: Size at maturation
+
+Just briefly because I think we should clarify part one first but for this section, the plan is to perform an ordinal logistic regression between the multinomial outcome variable (mature, immature and juvenile) and the predictor variable size. The result should give us an estimate of the probability of maturation depending on size. Not sure about how to split the data though. By generation and by tanks or just by tanks? I guess that in the first case we might be able to see whether the probablity of maturation differ between generations and not only between tanks and thus ecotypes but there are compromises to make. 
+
+1. In the generation 0 parents there is not enough information about maturity (Table 2) but we could use CZA data from the contact zone experiment.
+
+2. CZA data were collected continuously along the shore and not discretely by patches but we could imitate the sampling that was done for the offspring experiment and select CZA individuals within a circle with center equal to the mean path of each population and radius of 2m (or maybe a different radius?).
+
+Does it make sense to try by "generation" and by tanks?
+
+```{r tbl2, echo=FALSE}
+gen0_mat = as.data.frame(table(dat_gen0$sex))
+gen1_mat = as.data.frame(table(dat_gen1$sex))
+tbl2 = cbind(gen0_mat, gen1_mat[, 2])
+colnames(tbl2) = c("Maturity", "Count (0)", "Count (1)")
+set_caption(autofit(flextable(tbl2)), "Table 2. Frequency of maturity classes in generation 0 parents and generation 1 offspring.")
+```
+

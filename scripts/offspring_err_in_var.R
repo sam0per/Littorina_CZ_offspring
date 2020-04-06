@@ -1,3 +1,4 @@
+rm(list = ls())
 .packages = c("optparse", "dplyr", "tidyr", "rstan", "shinystan", "xtable")
 
 # Install CRAN packages (if not already installed)
@@ -64,22 +65,23 @@ dat_gen0[, paste0("scaled_", cz_phen)] = (dat_gen0$mean_thickness - mean(dat_gen
 x_meas = aggregate(x = dat_gen0[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen0$pop),
                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
 
-
 dat_gen1[, paste0("scaled_", cz_phen)] = (dat_gen1$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
 y_meas = aggregate(x = dat_gen1[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen1$pop),
                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
 
 # plot(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
 
+writeLines(readLines(stanfile))
 rstan_options(auto_write = TRUE)
 options(mc.cores = 4)
 # options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
 
-dat = list(N = nrow(x_meas$x), x = x_meas$x[, 'mean'], sd_x = x_meas$x[,"sd"])
+dat = list(N = nrow(x_meas$x), x = x_meas$x[, 'mean'], sd_x = x_meas$x[, "sd"])
 err_in_var <- rstan::stan(file = stanfile,
                           data = dat, iter = 12000, warmup =4000,
                           chains=4, refresh=12000,
                           control = list(stepsize = 0.01, adapt_delta = 0.99, max_treedepth = 15))
+
 dir.create(paste0(island, "_off_SW/", island, "_off_results"))
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
 dir.create(paste0(res_dir, "models"))
@@ -90,6 +92,8 @@ saveRDS(err_in_var, paste0(res_dir, "models/", island, "_err_in_var.rds"))
 
 # launch_shinystan(err_in_var)
 # pairs(err_in_var)
+pars = c("alpha", "beta", "sigma")
+pairs(err_in_var, pars = pars, include = TRUE)
 print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 
 # postd = extract(err_in_var)
@@ -100,3 +104,9 @@ stbl = rstan::summary(err_in_var)
 write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit.csv"))
 # xtable::xtable(stbl$summary)
 # xtable::xtable(stbl)
+
+plot(x_meas$x[, 'mean'], stbl$summary[grepl(pattern = "mu_yhat", x = row.names(stbl$summary)), 'mean'], col='red', pch=19)
+points(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
+
+
+

@@ -111,6 +111,12 @@ ggplot(data = tbl1) +
 
 We defined a regression model with measurement error in x an y using Stan.
 
+```{r}
+stanfile = "../scripts/offspring_err_in_var_model.stan"
+writeLines(readLines(stanfile))
+```
+
+
 ```{stan output.var="err_in_var", eval=FALSE, include=FALSE}
 // The input data are vectors 'x' and 'sd_x' of length 'N'.
 data {
@@ -146,19 +152,17 @@ model {
 }
 ```
 
-```{r, echo=FALSE}
-# There were warning messages when using $\sigma_{x_{T}}$ after scaling:
-# 
-# 1: There were 59 divergent transitions after warmup. Increasing adapt_delta above 0.99 may help. See http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
-# 
-# 2: There were 8059 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See
-# http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded
-# 
-# 3: There were 4 chains where the estimated Bayesian Fraction of Missing Information was low. See
-# http://mc-stan.org/misc/warnings.html#bfmi-low
-# 
-# We can examine the Stan output to diagnose the above sampling problems (Fig. 2) and also look at the parameter estimate for _sigma_ (Table 2).
-```
+
+There were warning messages when using $\sigma_{x_{T}}$ after scaling:
+
+1: There were 35 divergent transitions after warmup. Increasing adapt_delta above 0.99 may help. See http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+
+2: There were 4 chains where the estimated Bayesian Fraction of Missing Information was low. See http://mc-stan.org/misc/warnings.html#bfmi-low
+ 
+4: Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See http://mc-stan.org/misc/warnings.html#bulk-ess 
+
+We can examine the Stan output to diagnose the above sampling problems (Fig. 2) and also look at the parameter estimate for _sigma_ (Table 2).
 
 
 ```{r fig2, echo=FALSE, fig.cap="Figure 2. Divergent transitions diagnosis.", eval=FALSE}
@@ -186,6 +190,8 @@ autofit(flextable(data = cbind(par = stbl[pars_idx, 1], tbl2)))
 # \
 # 
 # Since we standardized the data we know that $\alpha$ should be centered near 0 and $\beta$ near 1 (Table 2). We would also expect the fitted values to fall onto the 1:1 line (Fig. 3).
+
+# What it says is that offspring thickness was generally a lot smaller than parent thickness and that the slope of the parent-offspring relationship is <1. This may well be driven by the small size of the offspring compared to the parents (I assume they were smaller and so thinner?).
 ```
 
 

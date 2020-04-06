@@ -1,6 +1,19 @@
 rm(list = ls())
 
 ####################################
+# Size_issue.Rmd check if size_mm 
+# is a numeric variable
+####################################
+head(levels(dat_off$size_mm))
+is.numeric(dat_off$size_mm)
+sum(dat_off$size_mm==" but that heavy...?", na.rm = TRUE)
+sum(dat_off$size_mm=="", na.rm = TRUE)
+which(dat_off$size_mm==" but that heavy...?")
+which(dat_off$size_mm=="")
+dat_off[1650, ]
+dat_off[1651, ]
+
+####################################
 ####### Spatial structure and ######
 # relationship between populations #
 ####################################
