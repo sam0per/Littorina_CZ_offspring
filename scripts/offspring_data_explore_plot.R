@@ -66,7 +66,7 @@ LLfunction <- function(obs,x_bar,x_sd){
 }
 # this loop is not needed for CZA because it has a single measure of activity
 phen_fl
-dtnum = 3
+dtnum = 4
 bold = phen_dt[[dtnum]]
 head(bold)
 str(bold)
@@ -161,7 +161,7 @@ write.csv(bold, paste0(nu_phen_dir, "/", basename(nu_phen_fl), "_", cdate, ".csv
 ##########################
 ######## thickness #######
 ##########################
-island = "CZD"
+island = "CZA"
 cz_gen = "gen1"
 cz_phen = "thickness"
 if (island=="CZA") {
@@ -207,7 +207,7 @@ lapply(1:length(phen_fl), function(x) {
 # TODO:
 # type in weight for CZD off generation 1 300
 #######################
-island = "CZD"
+island = "CZA"
 cz_gen = "gen1"
 cz_phen = "weight"
 if (island=="CZA") {
@@ -397,7 +397,7 @@ phen_all_dt = Reduce(function(...) merge(..., all=TRUE, by="snail_ID"), phen_all
 head(phen_all_dt)
 colnames(phen_all_dt)
 colnames(phen_all_dt)[which(colnames(phen_all_dt)=="score")] = "bold_score"
-sum(grepl(pattern = "snail_ID", x = colnames(phen_all_dt)))
+sum(grepl(pattern = "snail", x = colnames(phen_all_dt)))
 sum(grepl(pattern = "sex", x = colnames(phen_all_dt)))
 sex_col = colnames(phen_all_dt)[(grepl(pattern = "sex", x = colnames(phen_all_dt)))]
 
@@ -412,11 +412,17 @@ sex_miss = apply(X = sex_dt, MARGIN = 2, FUN = function(x) {
 apply(X = sex_miss, MARGIN = 2, FUN = function(x) table(x))
 # which(sex_miss[, 4]=="missing")
 # which(sex_miss[, 3]=="missing")
-comp_with = 3
-sex_diff = setdiff(which(sex_miss[, 4]=="missing"), which(sex_miss[, comp_with]=="missing"))
-sex_miss[sex_diff, 4] = sex_miss[sex_diff, comp_with]
+# just one comparison between column 1 and column 2
+comp_with = 1
+sex_diff = setdiff(which(sex_miss[, 3]=="missing"), which(sex_miss[, comp_with]=="missing"))
+sex_miss[sex_diff, 3] = sex_miss[sex_diff, comp_with]
+phen_all_dt[which(sex_miss[, 3]=="missing"), "snail_ID"]
+phen_all_dt[which(sex_miss[, 3]=="missing"), c("snail_ID", "broodpouch", "penis")]
+phen_all_dt[duplicated(phen_all_dt$snail_ID), "snail_ID"] %in% phen_all_dt[which(sex_miss[, 3]=="missing"), "snail_ID"]
+# c("R_321B", "R_56", "R_58") %in% phen_all_dt[which(sex_miss[, 3]=="missing"), "snail_ID"]
+# all_miss = phen_all_dt[which(sex_miss[, 3]=="missing"), ]
 
-phen_all_dt$sex = sex_miss[, 4]
+phen_all_dt$sex = sex_miss[, 3]
 phen_all_dt[phen_all_dt$sex=='missing', ]
 
 (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
@@ -431,7 +437,7 @@ foo = read.csv(paste0(dat_dir, "/", island, "_off_all_phenos_main_", odate, ".cs
 
 # foo = read.csv("CZA_off_SW/CZA_off_final_data/CZA_off_all_phenos_main_20191216.csv")
 # colnames(foo)
-(kcol = c(intersect(colnames(phen_all_dt), colnames(foo)), "size_mm", "PC1", "PC2"))
+(kcol = intersect(colnames(phen_all_dt), colnames(foo)))
 mdt = phen_all_dt[, which(colnames(phen_all_dt) %in% kcol)]
 # head(mdt)
 # 
