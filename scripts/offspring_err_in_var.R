@@ -35,7 +35,7 @@ cz_phen = "mean_thickness"
 
 dat_dir = paste0(island, "_off_SW/", island, "_off_final_data/")
 
-dat_off = read.csv(file = paste0(dat_dir, island, "_off_all_phenos_main_20200110.csv"))
+dat_off = read.csv(file = paste0(dat_dir, island, "_off_all_phenos_main_20200406.csv"))
 # colnames(dat_off)
 # head(dat_off)
 # sample_n(dat_off, size = 10)
