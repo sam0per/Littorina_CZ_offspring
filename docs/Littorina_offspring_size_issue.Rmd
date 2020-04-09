@@ -12,7 +12,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 
 .packages = c("optparse", "dplyr", "tidyr", "knitr", "kableExtra", "ggrepel",
-              "flextable", "officer", "ggcorrplot")
+              "flextable", "officer", "ggcorrplot", "data.table")
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
 if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
@@ -38,7 +38,7 @@ dat_check = lapply(1:length(ID_ch), function(x) {
 })
 dat_off[, "generation"] = 1
 dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
-dat_off$weight_logcuberoot = log(dat_off$weight_g^(1/3))
+dat_off$weight_cuberoot = dat_off$weight_g^(1/3)
 
 # dat_gen0 = dat_off[dat_off$generation==0, ]
 # 
@@ -49,7 +49,7 @@ dat_off$weight_logcuberoot = log(dat_off$weight_g^(1/3))
 # dat_gen1[diff_ypop_idx, ]
 # dat_gen1[diff_ypop_idx, "ID"] = substr(dat_gen1[diff_ypop_idx, "pop"], start = 2, stop = 4)
 # dat_gen1[diff_ypop_idx, "pop"] = substr(dat_gen1[diff_ypop_idx, "pop"], start = 1, stop = 1)
-off_phen = c("bold_score", "mean_thickness", "weight_logcuberoot", "PC2")
+off_phen = c("bold_score", "mean_thickness", "weight_cuberoot", "PC2")
 # tbl1 = rbind(dat_gen0, dat_gen1)[, c(off_phen, "size_mm", "generation", "pop", "ID")]
 tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID", "sex")]
 ```
@@ -68,9 +68,7 @@ $\ln{\text{weight}} \sim \text{size} \times \text{tank}$
 
 (and try adding a term for maturity?).
 
-Taking the cube root of weight returns negative values
-
-```{r tmp1, echo=FALSE, fig.cap="Figure tmp1. Scatter plots of the relationship between size and the other phenotypes in each generation separately.", fig.height=5, fig.width=5, warning=FALSE, dpi=300}
+```{r ftmp1, echo=FALSE, fig.cap="Figure tmp1. Scatter plots of the relationship between size and the other phenotypes per population in each generation separately. Phenotypic values have not been scaled.", fig.height=5, fig.width=5, warning=FALSE, dpi=300}
 lapply(seq_along(off_phen), function(x) {
   ggplot(data = tbl1) +
     facet_wrap(~pop) +
@@ -94,6 +92,74 @@ lapply(seq_along(off_phen), function(x) {
                                    colour = "black"),
           panel.grid = element_line(colour = "gray70", size = 0.2))
 })
+```
+
+\
+
+```{r ftmp2, echo=FALSE, fig.height=3, fig.width=3, warning=FALSE, dpi=300, fig.cap="Figure tmp2. Boxplot of the scaled cube root of weight per generation and population. Phenotypic values have been scaled."}
+one_phen = c(off_phen[3], "size_mm")
+genx = c("0", "1")
+
+mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
+sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
+
+scaled_phen = lapply(genx, function(x) {
+  one_dt = tbl1[tbl1$generation==x, c(one_phen, 'pop', 'ID', 'sex')]
+  outna_dt = one_dt[complete.cases(one_dt), ]
+  outna_dt[, paste0('scaled_', one_phen[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
+  outna_dt[, paste0('scaled_', one_phen[2])] = (outna_dt[,2] - mean_x0[2]) / sd_x0[2]
+  return(outna_dt)
+})
+col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
+
+# invisible(lapply(seq_along(genx), function(x) {
+#   boxplot(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, 'pop'], data = scaled_phen[[x]],
+#           xlab = "", ylab = paste0('scaled_', one_phen[1]), main = paste0('generation ', genx[x]))
+# }))
+scaled_phen[[1]]$generation = 0
+scaled_phen[[2]]$generation = 1
+all_genx = as.data.frame(rbindlist(scaled_phen))
+e <- ggplot(data = all_genx, aes(x = pop, y = all_genx[, col_phen[1]]))
+e2 <- e + geom_boxplot(aes(fill = factor(generation)),position = position_dodge(0.9)) +
+  scale_fill_manual(values = c("#5e3c99", "#e66101")) +
+  labs(x = "", y = paste0('scaled_', one_phen[1]), fill = "generation") +
+  theme(legend.position = "top",
+        # plot.title = element_text(size = 19, hjust = 0.5),
+        axis.title = element_text(size = 8),
+        axis.text = element_text(size=5),
+        axis.ticks = element_line(size = 0.5),
+        panel.background = element_blank(),
+        strip.background=element_rect(fill="#91bfdb"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line = element_line(size = 0.2, linetype = "solid",
+                                 colour = "black"),
+        panel.grid = element_line(colour = "gray70", size = 0.2))
+e2
+```
+
+\
+
+```{r ttmp1ab, echo=FALSE}
+# basic.lm = lapply(seq_along(genx), function(x) {
+#   lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]],
+#      data = scaled_phen[[x]])
+# })
+# lapply(basic.lm, summary)
+
+bypop.lm = lapply(seq_along(genx), function(x) {
+  lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]] + pop,
+     data = scaled_phen[[x]])
+})
+# lapply(bypop.lm, summary)
+names(bypop.lm[[1]]$coefficients)[2] = paste0('scaled_', one_phen[2])
+set_caption(autofit(flextable(data.frame(Parameter = names(bypop.lm[[1]]$coefficients),
+                                         round(summary(bypop.lm[[1]])$coefficients, 3)))),
+            "Table tmp1a. Summary of the linear model in generation 0 parents with scaled cube root of the weight as response variable and scaled size plus population as explanatory variables.")
+
+names(bypop.lm[[2]]$coefficients)[2] = paste0('scaled_', one_phen[2])
+set_caption(autofit(flextable(data.frame(Parameter = names(bypop.lm[[2]]$coefficients),
+                                         round(summary(bypop.lm[[2]])$coefficients, 3)))),
+            "Table tmp1b. Summary of the linear model in generation 1 offspring with scaled cube root of the weight as response variable and scaled size plus population as explanatory variables.")
 ```
 
 

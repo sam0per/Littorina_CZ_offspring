@@ -10,9 +10,6 @@ genx = c("0", "1")
 mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
 sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
 
-head(tbl1[tbl1$generation==0, one_phen])
-length(complete.cases(tbl1[tbl1$generation==0, one_phen]))
-
 scaled_phen = lapply(genx, function(x) {
   one_dt = tbl1[tbl1$generation==x, c(one_phen, 'pop', 'ID', 'sex')]
   outna_dt = one_dt[complete.cases(one_dt), ]
@@ -38,7 +35,8 @@ lapply(basic.lm, summary)
 (prelim_plot <- lapply(seq_along(genx), function(x) {
   ggplot(scaled_phen[[x]], aes(x = scaled_phen[[x]][, col_phen[2]], y = scaled_phen[[x]][, col_phen[1]])) +
     geom_point() +
-    geom_smooth(method = "lm")
+    geom_smooth(method = "lm") +
+    labs(y = paste0('scaled_', one_phen[1]), x = paste0('scaled_', one_phen[2]), title = paste0('generation ', genx[x]))
 }))
 plot(basic.lm[[1]], which = 1)
 plot(basic.lm[[2]], which = 1)
@@ -46,5 +44,44 @@ plot(basic.lm[[1]], which = 2)
 plot(basic.lm[[2]], which = 2)
 
 lapply(seq_along(genx), function(x) {
-  boxplot(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, 'pop'], data = scaled_phen[[x]])
+  boxplot(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, 'pop'], data = scaled_phen[[x]],
+          xlab = "", ylab = paste0('scaled_', one_phen[1]), main = paste0('generation ', genx[x]))
 })
+scaled_phen[[1]]$generation = 0
+scaled_phen[[2]]$generation = 1
+library(data.table)
+all_genx = as.data.frame(rbindlist(scaled_phen))
+boxplot(all_genx[, col_phen[1]] ~ all_genx[, 'pop'] + all_genx[, 'generation'], data = all_genx,
+        xlab = "", ylab = paste0('scaled_', one_phen[1]))
+e <- ggplot(data = all_genx, aes(x = pop, y = all_genx[, col_phen[1]]))
+e2 <- e + geom_boxplot(aes(fill = factor(generation)),position = position_dodge(0.9)) +
+  scale_fill_manual(values = c("#5e3c99", "#e66101")) +
+  labs(x = "", y = paste0('scaled_', one_phen[1]), fill = "generation") +
+  theme(legend.position = "top",
+        # plot.title = element_text(size = 19, hjust = 0.5),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size=9),
+        axis.ticks = element_line(size = 0.5),
+        panel.background = element_blank(),
+        strip.background=element_rect(fill="#91bfdb"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line = element_line(size = 0.2, linetype = "solid",
+                                 colour = "black"),
+        panel.grid = element_line(colour = "gray70", size = 0.2))
+e2
+dir.create(paste0(dirname(dat_dir), "/", island, "_off_final_figures"))
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_scaled_", one_phen[1], ".svg"),
+       plot=e2, width=10, height=8)
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_scaled_", one_phen[1], ".pdf"),
+       plot=e2, width=10, height=8)
+
+
+bypop.lm = lapply(seq_along(genx), function(x) {
+  lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]] + pop,
+     data = scaled_phen[[x]])
+})
+lapply(bypop.lm, summary)
+str(summary(bypop.lm[[1]]))
+round(summary(bypop.lm[[1]])$coefficients, 3)
+names(bypop.lm[[1]]$coefficients)[2] = paste0('scaled_', one_phen[2])
+
