@@ -38,7 +38,7 @@ dat_check = lapply(1:length(ID_ch), function(x) {
 })
 dat_off[, "generation"] = 1
 dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
-dat_off$weight_cuberoot = log(dat_off$weight_g^(1/3))
+dat_off$weight_logcuberoot = log(dat_off$weight_g^(1/3))
 
 # dat_gen0 = dat_off[dat_off$generation==0, ]
 # 
@@ -49,9 +49,9 @@ dat_off$weight_cuberoot = log(dat_off$weight_g^(1/3))
 # dat_gen1[diff_ypop_idx, ]
 # dat_gen1[diff_ypop_idx, "ID"] = substr(dat_gen1[diff_ypop_idx, "pop"], start = 2, stop = 4)
 # dat_gen1[diff_ypop_idx, "pop"] = substr(dat_gen1[diff_ypop_idx, "pop"], start = 1, stop = 1)
-off_phen = c("bold_score", "mean_thickness", "weight_cuberoot", "PC2")
+off_phen = c("bold_score", "mean_thickness", "weight_logcuberoot", "PC2")
 # tbl1 = rbind(dat_gen0, dat_gen1)[, c(off_phen, "size_mm", "generation", "pop", "ID")]
-tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID")]
+tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID", "sex")]
 ```
 
 \
@@ -66,7 +66,9 @@ For weight, we expect $\ln{\text{weight}} \sim \text{size}$ and weight should sc
 
 $\ln{\text{weight}} \sim \text{size} \times \text{tank}$
 
-(and try adding a term for maturity?)
+(and try adding a term for maturity?).
+
+Taking the cube root of weight returns negative values
 
 ```{r tmp1, echo=FALSE, fig.cap="Figure tmp1. Scatter plots of the relationship between size and the other phenotypes in each generation separately.", fig.height=5, fig.width=5, warning=FALSE, dpi=300}
 lapply(seq_along(off_phen), function(x) {
@@ -198,7 +200,7 @@ Just briefly because I think we should clarify part one first but for this secti
 
 Does it make sense to try by "generation" and by tanks?
 
-```{r tbl2, echo=FALSE}
+```{r tbl2, echo=FALSE, eval=FALSE, include=FALSE}
 gen0_mat = as.data.frame(table(dat_gen0$sex))
 gen1_mat = as.data.frame(table(dat_gen1$sex))
 tbl2 = cbind(gen0_mat, gen1_mat[, 2])
