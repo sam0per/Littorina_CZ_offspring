@@ -23,13 +23,16 @@ island = "CZA"
 
 For now, the data and results belong to the island `r island`.
 
-\
-
 ```{r, echo=FALSE, warning=FALSE}
 # cz_phen = "mean_thickness"
 # rm(list = ls())
 dat_dir = paste0(island, "_off_SW/", island, "_off_final_data/")
 dat_off = read.csv(file = paste0("../../",dat_dir, island, "_off_all_phenos_main_20200406.csv"))
+
+# sheet typo in the weight for snail C_60
+# dat_off[dat_off$snail_ID=='C_60', 'weight_g'] = dat_off[dat_off$snail_ID=='C_60', 'weight_g'] * 10
+dat_off = dat_off[-as.integer(rownames(dat_off[dat_off$snail_ID=='C_60', ])), ]
+
 dat_off = separate(data = dat_off, col = "snail_ID", into = c("pop", "ID"), sep = "_")
 ID_ch = table(nchar(as.character(dat_off$ID)))
 dat_check = lapply(1:length(ID_ch), function(x) {
@@ -59,14 +62,66 @@ tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID", "sex")]
 ## Part one: Size dependence of other traits
 
 A plastic response to a change in the environment can be observed in one or more phenotypes. Ideally, we would like to understand to what extent each phenotype is plastic but in some (perhaps many) cases the plastic responses are not independent because the phenotypic values are correlated.  
-Our question is about plasticity which can be studied from the relationship between offspring and parents (by tank). We think that any snail will change in various phenotypes as it grows. Taking weight as an example, the bigger the snail, the heavier it is. This means that comparing weights of offspring and parents risks simply showing us effects of size, rather than the plasticity in weight that we are interested in. We might see effects of size plasticity but we might also see confounding effects of other types of size variation, particularly the effect of sampling time.  
-There are generally two ways to deal with this: find the relationship between weight and size and then analyse residuals from that relationship, or include size as a covariate in the model when analysing weight. Generally, the latter approach is preferable but it can be hard to implement correctly (and I think that is probably true in our case because of the unusual regression approach we are using). Both approaches have a problem for the snails: we expect that (at least for some traits) the effect of size will be different for crab and wave (and might change continuously across the contact zone). So, there may be no single relationship between size and weight (for example) that can be applied to generate residuals.  
-I think this all means that the first step is to test the relationship of each variable to size and test whether the relationship is constant over tanks. I think this may have to be done separately for parents and offspring (although it might be nice to test whether the relationship changes...) and maybe also for adults and juveniles.  
+Our question is about plasticity which can be studied from the relationship between offspring and parents (by tank). We think that any snail will change in various phenotypes as it grows. Taking weight as an example, the bigger the snail, the heavier it is. This means that comparing weights of offspring and parents risks simply showing us effects of size, rather than the plasticity in weight that we are interested in. We might see effects of size plasticity but we might also see confounding effects of other types of size variation, particularly the effect of sampling time.
+
+There are generally two ways to deal with this: find the relationship between weight and size and then analyse residuals from that relationship, or include size as a covariate in the model when analysing weight. Generally, the latter approach is preferable but it can be hard to implement correctly (and I think that is probably true in our case because of the unusual regression approach we are using). Both approaches have a problem for the snails: we expect that (at least for some traits) the effect of size will be different for crab and wave (and might change continuously across the contact zone). So, there may be no single relationship between size and weight (for example) that can be applied to generate residuals.
+
+The first step is to test the relationship of each variable to size and test whether the relationship is constant over tanks. I think this may have to be done separately for parents and offspring (although it might be nice to test whether the relationship changes...) and maybe also for adults and juveniles.  
 For weight, we expect $\ln{\text{weight}} \sim \text{size}$ and weight should scale with $\text{size}^3$, where size is measured as length (mm) so an alternative is to use $\sqrt[3]{\text{weight}}$. So, we should fit:
 
 $\ln{\text{weight}} \sim \text{size} \times \text{tank}$
 
 (and try adding a term for maturity?).
+
+\
+
+```{r ttmp1ab, echo=FALSE}
+
+one_phen = c(off_phen[3], "size_mm")
+genx = c("0", "1")
+
+mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
+sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
+
+scaled_phen = lapply(genx, function(x) {
+  one_dt = tbl1[tbl1$generation==x, c(one_phen, 'pop', 'ID', 'sex')]
+  outna_dt = one_dt[complete.cases(one_dt), ]
+  outna_dt[, paste0('scaled_', one_phen[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
+  outna_dt[, paste0('scaled_', one_phen[2])] = (outna_dt[,2] - mean_x0[2]) / sd_x0[2]
+  return(outna_dt)
+})
+col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
+
+# invisible(lapply(seq_along(genx), function(x) {
+#   boxplot(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, 'pop'], data = scaled_phen[[x]],
+#           xlab = "", ylab = paste0('scaled_', one_phen[1]), main = paste0('generation ', genx[x]))
+# }))
+scaled_phen[[1]]$generation = 0
+scaled_phen[[2]]$generation = 1
+
+# basic.lm = lapply(seq_along(genx), function(x) {
+#   lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]],
+#      data = scaled_phen[[x]])
+# })
+# lapply(basic.lm, summary)
+
+bypop.lm = lapply(seq_along(genx), function(x) {
+  lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]] * pop,
+     data = scaled_phen[[x]])
+})
+# lapply(bypop.lm, summary)
+names(bypop.lm[[1]]$coefficients)[2] = paste0('scaled_', one_phen[2])
+set_caption(autofit(flextable(data.frame(Parameter = names(bypop.lm[[1]]$coefficients),
+                                         round(summary(bypop.lm[[1]])$coefficients, 3)))),
+            "Table tmp1a. Summary of the linear model in generation 0 parents with scaled cube root of the weight as response variable and scaled size plus population as explanatory variables.")
+
+names(bypop.lm[[2]]$coefficients)[2] = paste0('scaled_', one_phen[2])
+set_caption(autofit(flextable(data.frame(Parameter = names(bypop.lm[[2]]$coefficients),
+                                         round(summary(bypop.lm[[2]])$coefficients, 3)))),
+            "Table tmp1b. Summary of the linear model in generation 1 offspring with scaled cube root of the weight as response variable and scaled size plus population as explanatory variables.")
+```
+
+\
 
 ```{r ftmp1, echo=FALSE, fig.cap="Figure tmp1. Scatter plots of the relationship between size and the other phenotypes per population in each generation separately. Phenotypic values have not been scaled.", fig.height=5, fig.width=5, warning=FALSE, dpi=300}
 lapply(seq_along(off_phen), function(x) {
@@ -97,27 +152,7 @@ lapply(seq_along(off_phen), function(x) {
 \
 
 ```{r ftmp2, echo=FALSE, fig.height=3, fig.width=3, warning=FALSE, dpi=300, fig.cap="Figure tmp2. Boxplot of the scaled cube root of weight per generation and population. Phenotypic values have been scaled."}
-one_phen = c(off_phen[3], "size_mm")
-genx = c("0", "1")
 
-mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
-sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
-
-scaled_phen = lapply(genx, function(x) {
-  one_dt = tbl1[tbl1$generation==x, c(one_phen, 'pop', 'ID', 'sex')]
-  outna_dt = one_dt[complete.cases(one_dt), ]
-  outna_dt[, paste0('scaled_', one_phen[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
-  outna_dt[, paste0('scaled_', one_phen[2])] = (outna_dt[,2] - mean_x0[2]) / sd_x0[2]
-  return(outna_dt)
-})
-col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
-
-# invisible(lapply(seq_along(genx), function(x) {
-#   boxplot(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, 'pop'], data = scaled_phen[[x]],
-#           xlab = "", ylab = paste0('scaled_', one_phen[1]), main = paste0('generation ', genx[x]))
-# }))
-scaled_phen[[1]]$generation = 0
-scaled_phen[[2]]$generation = 1
 all_genx = as.data.frame(rbindlist(scaled_phen))
 e <- ggplot(data = all_genx, aes(x = pop, y = all_genx[, col_phen[1]]))
 e2 <- e + geom_boxplot(aes(fill = factor(generation)),position = position_dodge(0.9)) +
@@ -139,28 +174,7 @@ e2
 
 \
 
-```{r ttmp1ab, echo=FALSE}
-# basic.lm = lapply(seq_along(genx), function(x) {
-#   lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]],
-#      data = scaled_phen[[x]])
-# })
-# lapply(basic.lm, summary)
 
-bypop.lm = lapply(seq_along(genx), function(x) {
-  lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]] + pop,
-     data = scaled_phen[[x]])
-})
-# lapply(bypop.lm, summary)
-names(bypop.lm[[1]]$coefficients)[2] = paste0('scaled_', one_phen[2])
-set_caption(autofit(flextable(data.frame(Parameter = names(bypop.lm[[1]]$coefficients),
-                                         round(summary(bypop.lm[[1]])$coefficients, 3)))),
-            "Table tmp1a. Summary of the linear model in generation 0 parents with scaled cube root of the weight as response variable and scaled size plus population as explanatory variables.")
-
-names(bypop.lm[[2]]$coefficients)[2] = paste0('scaled_', one_phen[2])
-set_caption(autofit(flextable(data.frame(Parameter = names(bypop.lm[[2]]$coefficients),
-                                         round(summary(bypop.lm[[2]])$coefficients, 3)))),
-            "Table tmp1b. Summary of the linear model in generation 1 offspring with scaled cube root of the weight as response variable and scaled size plus population as explanatory variables.")
-```
 
 
 It may then be possible to predict what the mean $\ln{\text{weight}}$ for snails in each tank would be at the overall mean size of snails for the experiment (with associated standard error) and plug that into the plasticity calculations.

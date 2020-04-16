@@ -4,6 +4,13 @@ library(car)
 library(MASS)
 library(lme4)
 library(ggplot2)
+
+getwd()
+dat_dir = paste0(island, "_off_SW/", island, "_off_final_data/")
+dat_off = read.csv(file = paste0(dat_dir, island, "_off_all_phenos_main_20200406.csv"))
+
+dat_off = dat_off[-as.integer(rownames(dat_off[dat_off$snail_ID=='C_60', ])), ]
+
 one_phen = c(off_phen[3], "size_mm")
 genx = c("0", "1")
 
@@ -18,6 +25,7 @@ scaled_phen = lapply(genx, function(x) {
   return(outna_dt)
 })
 col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
+colnames(scaled_phen[[1]])[col_phen]
 
 lapply(seq_along(genx), function(x) hist(scaled_phen[[x]][, col_phen[1]]))
 lapply(seq_along(genx), function(x) hist(scaled_phen[[x]][, col_phen[2]]))
@@ -30,18 +38,28 @@ basic.lm = lapply(seq_along(genx), function(x) {
   lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]],
      data = scaled_phen[[x]])
 })
-lapply(basic.lm, summary)
-
-(prelim_plot <- lapply(seq_along(genx), function(x) {
-  ggplot(scaled_phen[[x]], aes(x = scaled_phen[[x]][, col_phen[2]], y = scaled_phen[[x]][, col_phen[1]])) +
-    geom_point() +
-    geom_smooth(method = "lm") +
-    labs(y = paste0('scaled_', one_phen[1]), x = paste0('scaled_', one_phen[2]), title = paste0('generation ', genx[x]))
-}))
 plot(basic.lm[[1]], which = 1)
 plot(basic.lm[[2]], which = 1)
 plot(basic.lm[[1]], which = 2)
 plot(basic.lm[[2]], which = 2)
+lapply(basic.lm, summary)
+
+bypop.lm = lapply(seq_along(genx), function(x) {
+  lm(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, col_phen[2]] * pop,
+     data = scaled_phen[[x]])
+})
+lapply(bypop.lm, summary)
+
+(prelim_plot <- lapply(seq_along(genx), function(x) {
+  ggplot(scaled_phen[[x]], aes(x = scaled_phen[[x]][, col_phen[2]], y = scaled_phen[[x]][, col_phen[1]], col=pop)) +
+    # facet_wrap(~pop) +
+    geom_point() +
+    geom_smooth(method = "lm", se = TRUE) +
+    labs(y = paste0('scaled_', one_phen[1]), x = paste0('scaled_', one_phen[2]), title = paste0('generation ', genx[x]))
+}))
+scaled_phen[[1]][scaled_phen[[1]]$pop=='C', col_phen[1]]
+scaled_phen[[1]][scaled_phen[[1]]$pop=='C', ]
+
 
 lapply(seq_along(genx), function(x) {
   boxplot(scaled_phen[[x]][, col_phen[1]] ~ scaled_phen[[x]][, 'pop'], data = scaled_phen[[x]],
