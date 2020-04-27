@@ -29,47 +29,97 @@ if (is.null(opt$island) | is.null(opt$stanfile)){
 island = opt$island
 stanfile = opt$stanfile
 # stanfile = "Littorina_offspring/scripts/offspring_err_in_var_model.stan"
-# island = "CZA"
 # cz_gen = "gen1"
-cz_phen = "mean_thickness"
+# define island/experiment
+island = "CZA"
 
+# read data
 dat_dir = paste0(island, "_off_SW/", island, "_off_final_data/")
-
 dat_off = read.csv(file = paste0(dat_dir, island, "_off_all_phenos_main_20200406.csv"))
-# colnames(dat_off)
-# head(dat_off)
-# sample_n(dat_off, size = 10)
-
+# remove weight type in CZA
+if (island=="CZA") {
+  dat_off = dat_off[-as.integer(rownames(dat_off[dat_off$snail_ID=='C_60', ])), ]
+}
+# prepare data for downstream analysis
 dat_off = separate(data = dat_off, col = "snail_ID", into = c("pop", "ID"), sep = "_")
-# dat_off[c(402, 403, 404, 829, 830, 831),]
-
-# mean(scale(dat_off[, cz_phen]), na.rm = TRUE)
-# mean(dat_off[, cz_phen], na.rm = TRUE)
-
-# table(nchar(as.character(dat_off$ID)))
 dat_off[, "generation"] = 1
 dat_off[which(nchar(as.character(dat_off$ID)) == 2), "generation"] = 0
+dat_off$weight_cuberoot = dat_off$weight_g^(1/3)
+off_phen = c("bold_score", "mean_thickness", "weight_cuberoot", "PC2")
+tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID", "sex")]
+rm(dat_off)
 
-dat_gen0 = dat_off[dat_off$generation==0, c("pop", "ID", cz_phen)]
+# define which phenotype to analyse together with size
+one_phen = c(off_phen[3], "size_mm")
+genx = c("0", "1")
+# scale the data
+mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
+sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
+scaled_phen = lapply(genx, function(x) {
+  one_dt = tbl1[tbl1$generation==x, c(one_phen, 'pop', 'ID', 'sex')]
+  outna_dt = one_dt[complete.cases(one_dt), ]
+  outna_dt[, paste0('scaled_', one_phen[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
+  outna_dt[, paste0('scaled_', one_phen[2])] = (outna_dt[,2] - mean_x0[2]) / sd_x0[2]
+  return(outna_dt)
+})
+col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
 
-dat_gen1 = dat_off[dat_off$generation==1, c("pop", "ID", cz_phen)]
-diff_ypop = apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
-                  FUN = function(x) !grepl(pattern = "x", x = x))
-diff_ypop_idx = which(apply(diff_ypop, MARGIN = 1, FUN = sum)==2)
-dat_gen1 = dat_gen1[diff_ypop_idx, ]
+# lapply(seq_along(genx), function(x) hist(scaled_phen[[x]][, col_phen[1]]))
+# lapply(seq_along(genx), function(x) hist(scaled_phen[[x]][, col_phen[2]]))
+# lapply(seq_along(genx), function(x) qqp(scaled_phen[[x]][, col_phen[1]], "norm"))
+# lapply(seq_along(genx), function(x) qqp(scaled_phen[[x]][, col_phen[2]], "norm"))
+# lapply(seq_along(genx), function(x) qqp(scaled_phen[[x]][, col_phen[1]], "lnorm"))
+# lapply(seq_along(genx), function(x) qqp(scaled_phen[[x]][, col_phen[2]], "lnorm"))
 
-diff_pop = setdiff(dat_gen0$pop, dat_gen1$pop)
-dat_gen0 = dat_gen0[dat_gen0$pop!=diff_pop,]
+## model fitting
+# prepare data for maturity models
+scaled_phen[[1]]$generation = 0
+scaled_phen[[2]]$generation = 1
+lapply(seq_along(genx), function(x) {
+  table(scaled_phen[[x]]$sex)
+})
+mod_dat = rbindlist(lapply(seq_along(genx), function(x) {
+  table(scaled_phen[[x]]$sex)
+  no_miss = scaled_phen[[x]][scaled_phen[[x]]$sex!="missing", ]
+  no_miss$maturity = "juvenile"
+  no_miss[no_miss$sex=="female" | no_miss$sex=="male", "maturity"] = "adult"
+  return(no_miss)
+}))
+table(mod_dat[mod_dat$generation==0, "maturity"])
+table(mod_dat[mod_dat$generation==1, "maturity"])
+rm(list = c("tbl1", "scaled_phen"))
+mod_dat = as.data.frame(mod_dat)
+head(mod_dat)
 
-dat_gen0[, paste0("scaled_", cz_phen)] = (dat_gen0$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
-x_meas = aggregate(x = dat_gen0[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen0$pop),
-                   FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+table(mod_dat$pop)
+table(mod_dat$ID)
 
-dat_gen1[, paste0("scaled_", cz_phen)] = (dat_gen1$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
-y_meas = aggregate(x = dat_gen1[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen1$pop),
-                   FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
+mod_dat = mod_dat[!grepl(pattern = "x", x = mod_dat$ID), ]
+# diff_ypop = apply(X = dat_gen1[, c("pop", "ID")], MARGIN = 2,
+#                   FUN = function(x) !grepl(pattern = "x", x = x))
+# diff_ypop_idx = which(apply(diff_ypop, MARGIN = 1, FUN = sum)==2)
+# dat_gen1 = dat_gen1[diff_ypop_idx, ]
 
-# plot(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
+diff_pop = setdiff(mod_dat[mod_dat$generation==0, "pop"], mod_dat[mod_dat$generation==1, "pop"])
+mod_dat = mod_dat[mod_dat$pop!=diff_pop, ]
+sample_n(tbl = mod_dat, size = 10)
+
+# dat_gen0[, paste0("scaled_", cz_phen)] = (dat_gen0$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
+# x_meas = aggregate(x = dat_gen0[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen0$pop),
+#                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+
+x_meas = aggregate(x = mod_dat[mod_dat$generation==0, paste0('scaled_', one_phen[1])],
+                   by = list(pop = mod_dat[mod_dat$generation==0, "pop"]),
+                   FUN = function(x) c(mean_x = mean(x, na.rm = TRUE), sd_x = sd(x, na.rm = TRUE)))
+
+# dat_gen1[, paste0("scaled_", cz_phen)] = (dat_gen1$mean_thickness - mean(dat_gen0$mean_thickness, na.rm = TRUE)) / sd(dat_gen0$mean_thickness, na.rm = TRUE)
+# y_meas = aggregate(x = dat_gen1[, paste0("scaled_", cz_phen)], by = list(pop = dat_gen1$pop),
+#                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
+
+y_meas = aggregate(x = mod_dat[mod_dat$generation==1, paste0('scaled_', one_phen[1])],
+                   by = list(pop = mod_dat[mod_dat$generation==1, "pop"]),
+                   FUN = function(y) c(mean_y = mean(y, na.rm = TRUE), sd_y = sd(y, na.rm = TRUE)))
+# plot(x_meas$x[, 'mean_x'], y_meas$x[, 'mean_y'])
 
 writeLines(readLines(stanfile))
 rstan_options(auto_write = TRUE)

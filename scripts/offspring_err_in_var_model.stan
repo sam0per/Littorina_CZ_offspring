@@ -8,17 +8,19 @@
 //    https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started
 //
 
-// The input data are vectors 'x', 'sd_x', 'y' and 'sd_y' of length 'N'.
+// The input data are vectors 'x', 'sd_x' and 'y' of length 'N'.
 data {
   int<lower=0> N;
   vector[N] x;
+  vector[N] y;
   vector<lower=0>[N] sd_x;
+  //vector<lower=0>[N] sd_y;
 }
 
 // The parameters accepted by the model.
 parameters {
   vector[N] x_lat;
-  vector[N] y_lat;
+  //vector[N] y_lat;
   real alpha;
   real beta;
   real<lower=0> sigma;
@@ -28,15 +30,16 @@ transformed parameters {
   vector[N] mu_yhat = alpha + beta * x_lat;
 }
 
-// The model to be estimated. We model the output
-// 'y_lat' to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
+// The model to be estimated. We model 'y'
+// to be normally distributed with mean 'mu_hat = alpha + beta * x_lat'
 // and standard deviation 'sigma'.
 model {
-  x_lat ~ normal(0, 100);
-  alpha ~ normal(0, 100);
-  beta ~ normal(1, 100);
-  sigma ~ cauchy(0, 5);
+  x_lat ~ normal(0, 5);
+  alpha ~ normal(0, 5);
+  beta ~ normal(1, 5);
+  sigma ~ cauchy(0, 1);
   
   x ~ normal(x_lat, sd_x);
-  y_lat ~ normal(mu_yhat, sigma);
+  y ~ normal(mu_yhat, sigma);
+  //y_lat ~ normal(mu_yhat, sigma);
 }

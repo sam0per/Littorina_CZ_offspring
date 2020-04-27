@@ -1,7 +1,7 @@
 rm(list = ls())
 
 .packages = c("optparse", "dplyr", "tidyr", "knitr", "kableExtra", "ggrepel", "RColorBrewer",
-              "flextable", "officer", "ggcorrplot", "data.table", "car", "MASS", "ggplot2")
+              "flextable", "officer", "ggcorrplot", "data.table", "car", "MASS", "ggplot2", "rstan", "shinystan")
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
 if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
@@ -124,7 +124,7 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
 
 ## model with separate generations
 # change the next variable with either 0 or 1
-one_gen = 0
+one_gen = 1
 one_dat = mod_dat[mod_dat$generation==one_gen, ]
 # reminder about which phenotypes we are analysing
 colnames(mod_dat)[col_phen]
@@ -223,11 +223,12 @@ if (grepl(pattern = "maturity", x = aic.low)) {
                         generation = one_gen)
 } else {
   one_pred = data.frame(predict(times_pop.lm, data.frame(scaled_size_mm = mean(mod_dat$scaled_size_mm),
-                                                         pop = unique(as.character(one_dat$pop))), interval = "confidence"),
+                                                         pop = unique(as.character(one_dat$pop))), se.fit = TRUE)[c("fit", "se.fit")],
+                        N = as.vector(table(one_dat$pop)),
                         pop = unique(one_dat$pop),
                         generation = one_gen)
 }
-
+one_pred$sd.fit = one_pred$se.fit * sqrt(one_pred$N)
 # test for the function predict
 coef(times_pop.lm)
 coef(times_pop.lm)[1] + coef(times_pop.lm)[2] * mean(mod_dat$scaled_size_mm)
@@ -238,34 +239,37 @@ coef(times_pop.lm)[1] + coef(times_pop.lm)[2] * mean(mod_dat$scaled_size_mm) + c
 dir.create(paste0(dirname(dat_dir), "/", island, "_off_results"))
 res_dir = paste0(dirname(dat_dir), "/", island, "_off_results")
 dir.create(paste0(res_dir, "/tables"))
-if (file.exists(paste0(res_dir, "/tables/", island, "_predict_mean_", one_phen[1], ".csv"))) {
-  write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_predict_mean_", one_phen[1], ".csv"),
+if (file.exists(paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))) {
+  write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"),
               quote = FALSE, row.names = FALSE, append = TRUE, col.names = FALSE, sep = ",")
 } else {
-  file.create(paste0(res_dir, "/tables/", island, "_predict_mean_", one_phen[1], ".csv"))
-  write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_predict_mean_", one_phen[1], ".csv"),
+  file.create(paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
+  write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"),
               quote = FALSE, row.names = FALSE, append = TRUE, col.names = TRUE, sep = ",")
 }
 
-# scatterplot lab vs wild predicted phenotype
-pred_dat = read.csv(file = paste0(res_dir, "/tables/", island, "_predict_mean_", one_phen[1], ".csv"))
+# scatterplot lab vs wild size-adjusted phenotype
+rm(list=setdiff(ls(), c("mod_dat", "dat_dir", "genx", "island", "one_gen", "one_phen", "res_dir")))
+pred_dat = read.csv(file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
 col_genx = c("#5e3c99", "#e66101")
 ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
-  geom_abline(slope = 1, linetype="dashed") +
+  geom_abline(slope = 1, linetype = "dashed") +
   geom_point(aes(x = fit, y = pred_dat[pred_dat$generation==1, "fit"]),
              size=3) +
   geom_errorbar(aes(x = fit,
-                    ymin = pred_dat[pred_dat$generation==1, "lwr"], ymax = pred_dat[pred_dat$generation==1, "upr"]),
-                size = 0.3) + 
+                    ymin = (pred_dat[pred_dat$generation==1, "fit"] - pred_dat[pred_dat$generation==1, "se.fit"]),
+                    ymax = (pred_dat[pred_dat$generation==1, "fit"] + pred_dat[pred_dat$generation==1, "se.fit"])),
+                size = 0.3, width = 0.01) + 
   geom_errorbarh(aes(y = pred_dat[pred_dat$generation==1, "fit"],
-                     xmin = lwr, xmax = upr),
-                 size = 0.3) +
+                     xmin = (fit - se.fit),
+                     xmax = (fit + se.fit)),
+                 size = 0.3, height = 0.005) +
   geom_label_repel(aes(x = fit, y = pred_dat[pred_dat$generation==1, "fit"],
                        label = LETTERS[2:18]),
                    box.padding   = 0.35, 
                    point.padding = 0.5,
                    segment.color = 'grey50') +
-  labs(title = paste0("predicted ", one_phen[1]), x = "wild sample", y = "lab-reared sample") +
+  labs(title = paste0("Size-adjusted ", one_phen[1]), x = "wild sample", y = "lab-reared sample") +
   theme(legend.position = "none",
         plot.title = element_text(size = 19, hjust = 0.5),
         axis.title = element_text(size = 18),
@@ -277,12 +281,12 @@ ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
                                  colour = "black"),
         panel.grid = element_line(colour = "gray70", size = 0.2))
 
-# boxplot wild and sample predicted weight
+# boxplot wild and sample size_adjusted phenotype
 (pred_plot = ggplot(data = pred_dat, aes(x = pop, y = fit, col = factor(generation))) +
   geom_point(position = position_dodge(0.9), size = 3) +
-  geom_errorbar(aes(ymin = lwr, ymax = upr), size = 0.5, position = position_dodge(0.9)) +
+  geom_errorbar(aes(ymin = (fit - se.fit), ymax = (fit + se.fit)), size = 0.5, position = position_dodge(0.9)) +
   scale_color_manual(values = col_genx) +
-  labs(x = "", y = paste0('predicted scaled ', one_phen[1]), col = "generation") +
+  labs(x = "", y = paste0('size-adjusted scaled ', one_phen[1]), col = "generation") +
   theme(legend.position = "top", legend.text = element_text(size = 11), legend.title = element_text(size = 14),
         axis.title.y = element_text(size = 14),
         axis.text = element_text(size = 11),
@@ -293,9 +297,9 @@ ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
         axis.line = element_line(size = 0.2, linetype = "solid",
                                  colour = "black"),
         panel.grid = element_line(colour = "gray70", size = 0.2)))
-ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_scaled_", one_phen[1], "_pred.svg"),
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_adjusted_", one_phen[1], ".svg"),
        plot=pred_plot, width=10, height=8)
-ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_scaled_", one_phen[1], "_pred.pdf"),
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_adjusted_", one_phen[1], ".pdf"),
        plot=pred_plot, width=10, height=8)
 
 
@@ -439,3 +443,65 @@ best_plot <- ggplot(one_dat, aes_string(x = paste0('scaled_', one_phen[2]), y = 
     # facet_wrap(col_mod) +
     geom_smooth(method = "lm", se = TRUE, aes_string(col = col_mod, fill = col_mod), alpha = 0.2) +
     geom_point(aes_string(col = col_mod), alpha = 0.5))
+
+
+
+## Plasticity analysis
+# Size-adjusted means after scaling
+rm(list = setdiff(ls(), c("island", "one_phen")))
+res_dir = paste0(island, "_off_SW/", island, "_off_results/")
+pred_dat = read.csv(file = paste0(res_dir, "tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
+# col_genx = c("#5e3c99", "#e66101")
+
+diff_pop = names(table(pred_dat$pop))[table(pred_dat$pop)<2]
+mod_dat = pred_dat[pred_dat$pop!=diff_pop, ]
+sample_n(tbl = mod_dat, size = 10)
+
+stanfile = "Littorina_offspring/scripts/offspring_err_in_var_model.stan"
+writeLines(readLines(stanfile))
+rstan_options(auto_write = TRUE)
+# options(mc.cores = 4)
+options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
+
+x_meas = mod_dat[mod_dat$generation==0, ]
+
+y_meas = mod_dat[mod_dat$generation==1, ]
+# nums <- unlist(lapply(y_meas, is.numeric))
+# y_meas_ppt = round(y_meas[, nums], 2)
+
+dat = list(N = nrow(x_meas), x = x_meas$fit, sd_x = x_meas$sd.fit, y = y_meas$fit)
+err_in_var <- rstan::stan(file = stanfile,
+                          data = dat, iter = 12000, warmup = 4000,
+                          chains=4, refresh=12000,
+                          control = list(stepsize = 0.01, adapt_delta = 0.99, max_treedepth = 15))
+
+
+dir.create(paste0(res_dir, "models"))
+dir.create(paste0(res_dir, "tables"))
+
+saveRDS(err_in_var, paste0(res_dir, "models/", island, "_err_in_var.rds"))
+# err_in_var = readRDS(paste0(res_dir, "models/", island, "_err_in_var.rds"))
+
+# launch_shinystan(err_in_var)
+# pairs(err_in_var)
+pars = c("alpha", "beta", "sigma")
+# pars = c("alpha", "beta")
+pdf(file = paste0(dirname(res_dir), "/", island, "_off_final_figures/", island, "_off_err_in_var_pairs.pdf"),
+    width = 8, height = 8)
+pairs(err_in_var, pars = pars, include = TRUE)
+dev.off()
+# print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
+print(err_in_var, pars = pars, digits=3)
+
+# postd = extract(err_in_var)
+# names(postd)
+# dim(postd$alpha)
+
+stbl = rstan::summary(err_in_var)
+write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit.csv"))
+# xtable::xtable(stbl$summary)
+# xtable::xtable(stbl)
+
+plot(x_meas$x[, 'mean'], stbl$summary[grepl(pattern = "mu_yhat", x = row.names(stbl$summary)), 'mean'], col='red', pch=19)
+points(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
+
