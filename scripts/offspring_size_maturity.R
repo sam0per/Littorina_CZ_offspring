@@ -304,6 +304,7 @@ AIC(mle.s_mat_cline)
 rm(list = setdiff(ls(), c("tbl1", "mle.s_mat", "mle.s_mat_nout", "dat_dir", "island", "s_mat", "s_mat_fit")))
 
 # model 2: maturity is 0,1,2 for juvenile,female,male
+# two means two slopes
 tbl1 = tbl1[!is.na(tbl1$size_mm), ]
 tbl1$size_log = log(tbl1$size_mm)
 sample_n(tbl = tbl1, size = 10)
@@ -314,6 +315,40 @@ table(tbl1$maturity)
 names(table(tbl1$maturity))
 head(tbl1)
 # write.csv(x = tbl1, file = "/Users/samuelperini/Desktop/test_mod2_size_maturity.csv", quote = FALSE, row.names = FALSE)
+
+k_classes = names(table(tbl1$maturity))[-1]
+k_pars = c("mean", "slope")
+(nm_pars = as.vector(outer(k_pars, k_classes, paste, sep=".")))
+
+parnames(twoM_twoS) = nm_pars[order(nm_pars)]
+
+theta.init = setNames(c(2,2,1,1),  nm_pars[order(nm_pars)])
+mle.s_mat_2M2S <- mle2(minuslogl = twoM_twoS, start = theta.init,
+                       data = list(data = tbl1, y_col = 10, x_col = 11))
+summary(mle.s_mat_2M2S)
+AIC(mle.s_mat_2M2S)
+round(coef(mle.s_mat_2M2S), 2)
+mle.s_mat_fm_2M2S = mle.s_mat_2M2S
+rm(mle.s_mat_2M2S)
+
+# model 2: two means and one slope
+k_classes = names(table(tbl1$maturity))[-1]
+k_pars = "mean"
+(nm_pars = c("slope", as.vector(outer(k_pars, k_classes, paste, sep="."))))
+
+parnames(twoM_oneS) = nm_pars
+
+theta.init = setNames(c(1,2,2),  nm_pars)
+mle.s_mat_2M1S <- mle2(minuslogl = twoM_oneS, start = theta.init,
+                       data = list(data = tbl1, y_col = 10, x_col = 11))
+summary(mle.s_mat_2M1S)
+round(coef(mle.s_mat_2M1S), 2)
+mle.s_mat_fm_2M1S = mle.s_mat_2M1S
+rm(mle.s_mat_2M1S)
+
+
+
+
 
 # function for the likelihood of the data given that the logit(probability of maturity) is a linear function of size
 # ‘mat’ is 0,1,2 for juvenile,female,male
@@ -429,7 +464,7 @@ table(tbl1$maturity)
 names(table(tbl1$maturity))
 head(tbl1)
 
-s_mat_sex
+# s_mat_sex
 
 mean(tbl1[tbl1$maturity==0, "size_log"])
 mean(tbl1[tbl1$maturity==1, "size_log"])
@@ -507,25 +542,114 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
                    paste(m_class, collapse = "_"), "_fit.pdf"),
        plot=p_fit2, width=10, height=8)
 
-parnames(s_mat_sex)
-setNames(c(0,0), colnames(model.matrix(tbl1$maturity ~ tbl1$size_log)))
-colnames(model.matrix(tbl1$maturity ~ tbl1$size_log + tbl1$pop))
-dim(model.matrix(tbl1$maturity ~ tbl1$size_log + tbl1$pop))
 
-one_slope <- function(data, mean, slope) {
+# colnames(tbl1)[10]
+# colnames(tbl1)[11]
+# y_col = 10
+# x_col = 11
+# data = tbl1
+# mean = c(2,2)
+# slope = c(1,1)
+twoM_twoS <- function(data, y_col, x_col, beta) {
+  k_count <- table(data[, y_col])[-1]
+  logit_p <- matrix(nrow = nrow(data), ncol = length(k_count))
+  p <- matrix(nrow = nrow(data), ncol = length(k_count))
   
-  logit_p_f <- (data[, "size_log"] - mean.f)  / slope.f
-  logit_p_m <- (data[, "size_log"] - mean.m)  / slope.m
-  
-  p_f <- 0.5 * exp(logit_p_f) / (exp(logit_p_f)+1)
-  p_m <- 0.5 * exp(logit_p_m) / (exp(logit_p_m)+1)
-  p_j <- 1 - p_f - p_m
+  for (k in 1:length(k_count)) {
+    # variable x should be already transformed
+    logit_p[, k] <- (data[, x_col] - beta[k]) / beta[k+2]
+    p[, k] <- 0.5 * exp(logit_p[, k]) / (exp(logit_p[, k])+1)
+  }
+  p_0 <- 1 - rowSums(p)
+  # logit_p_f <- (data[, "size_log"] - mean.f)  / slope.f
+  # logit_p_m <- (data[, "size_log"] - mean.m)  / slope.m
+  # 
+  # p_f <- 0.5 * exp(logit_p_f) / (exp(logit_p_f)+1)
+  # p_m <- 0.5 * exp(logit_p_m) / (exp(logit_p_m)+1)
+  # p_j <- 1 - p_f - p_m
   # p_j <- (1 - p_f) * sr + (1-p_m) * (1 - sr)
   
-  ll <- log(p_j)
-  ll[data[, "maturity"] == 1] <- log(p_f[data[, "maturity"] == 1])
-  ll[data[, "maturity"] == 2] <- log(p_m[data[, "maturity"] == 2])
+  ll <- log(p_0)
+  for (k in 1:length(k_count)) {
+    ll[data[, y_col] == k] <- log(p[data[, y_col] == k, k])
+  }
   
   minusll <- -sum(ll)
   return(minusll)
 }
+k_classes = names(table(tbl1$maturity))[-1]
+k_pars = c("mean", "slope")
+(nm_pars = as.vector(outer(k_pars, k_classes, paste, sep=".")))
+
+parnames(twoM_twoS) = nm_pars[order(nm_pars)]
+
+theta.init = setNames(c(2,2,1,1),  nm_pars[order(nm_pars)])
+mle.s_mat_2M2S <- mle2(minuslogl = twoM_twoS, start = theta.init,
+                       data = list(data = tbl1, y_col = 10, x_col = 11))
+summary(mle.s_mat_2M2S)
+AIC(mle.s_mat_2M2S)
+AIC(mle.s_mat_po)
+round(coef(mle.s_mat_2M2S), 2)
+mle.s_mat_po_2M2S = mle.s_mat_2M2S
+rm(mle.s_mat_2M2S)
+
+
+twoM_oneS <- function(data, y_col, x_col, beta) {
+  k_count <- table(data[, y_col])[-1]
+  logit_p <- matrix(nrow = nrow(data), ncol = length(k_count))
+  p <- matrix(nrow = nrow(data), ncol = length(k_count))
+  
+  for (k in 1:length(k_count)) {
+    # variable x should be already transformed
+    logit_p[, k] <- (data[, x_col] - beta[k+1]) / beta[1]
+    p[, k] <- 0.5 * exp(logit_p[, k]) / (exp(logit_p[, k])+1)
+  }
+  p_0 <- 1 - rowSums(p)
+  # logit_p_f <- (data[, "size_log"] - mean.f)  / slope.f
+  # logit_p_m <- (data[, "size_log"] - mean.m)  / slope.m
+  # 
+  # p_f <- 0.5 * exp(logit_p_f) / (exp(logit_p_f)+1)
+  # p_m <- 0.5 * exp(logit_p_m) / (exp(logit_p_m)+1)
+  # p_j <- 1 - p_f - p_m
+  # p_j <- (1 - p_f) * sr + (1-p_m) * (1 - sr)
+  
+  ll <- log(p_0)
+  for (k in 1:length(k_count)) {
+    ll[data[, y_col] == k] <- log(p[data[, y_col] == k, k])
+  }
+  
+  minusll <- -sum(ll)
+  return(minusll)
+}
+k_classes = names(table(tbl1$maturity))[-1]
+k_pars = "mean"
+(nm_pars = c("slope", as.vector(outer(k_pars, k_classes, paste, sep="."))))
+
+parnames(twoM_oneS) = nm_pars
+
+theta.init = setNames(c(1,2,2),  nm_pars)
+mle.s_mat_2M1S <- mle2(minuslogl = twoM_oneS, start = theta.init,
+                       data = list(data = tbl1, y_col = 10, x_col = 11))
+summary(mle.s_mat_2M1S)
+AIC(mle.s_mat_2M2S)
+AIC(mle.s_mat_2M1S)
+round(coef(mle.s_mat_2M1S), 2)
+mle.s_mat_po_2M1S = mle.s_mat_2M1S
+rm(mle.s_mat_2M1S)
+tbl1$po_maturity = tbl1$maturity
+table(tbl1$po_maturity)
+
+(mle_obj = ls()[grepl(pattern = "mle.s", x = ls())])
+which.min(sapply(mle_obj, function(x) AIC(get(x))))
+(fun_obj = ls()[grepl(pattern = "twoM", x = ls())])
+rm(list = setdiff(ls(), c("tbl1", mle_obj, "dat_dir", "island", fun_obj)))
+
+
+
+
+
+
+
+
+
+
