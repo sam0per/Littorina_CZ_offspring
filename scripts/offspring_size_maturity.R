@@ -594,7 +594,7 @@ mle.s_mat_po_2M2S = mle.s_mat_2M2S
 rm(mle.s_mat_2M2S)
 
 
-twoM_oneS <- function(data, y_col, x_col, beta) {
+twoM_oneS <- function(data, y_col, x_col, sr, beta) {
   k_count <- table(data[, y_col])[-1]
   logit_p <- matrix(nrow = nrow(data), ncol = length(k_count))
   p <- matrix(nrow = nrow(data), ncol = length(k_count))
@@ -602,7 +602,7 @@ twoM_oneS <- function(data, y_col, x_col, beta) {
   for (k in 1:length(k_count)) {
     # variable x should be already transformed
     logit_p[, k] <- (data[, x_col] - beta[k+1]) / beta[1]
-    p[, k] <- 0.5 * exp(logit_p[, k]) / (exp(logit_p[, k])+1)
+    p[, k] <- sr * exp(logit_p[, k]) / (exp(logit_p[, k])+1)
   }
   p_0 <- 1 - rowSums(p)
   # logit_p_f <- (data[, "size_log"] - mean.f)  / slope.f
@@ -640,13 +640,72 @@ tbl1$po_maturity = tbl1$maturity
 table(tbl1$po_maturity)
 
 (mle_obj = ls()[grepl(pattern = "mle.s", x = ls())])
-which.min(sapply(mle_obj, function(x) AIC(get(x))))
+aic_mat = sapply(mle_obj, function(x) AIC(get(x)))
+data.frame(AIC = aic_mat[order(aic_mat)])
+# which.min(aic_mat)
 (fun_obj = ls()[grepl(pattern = "twoM", x = ls())])
 rm(list = setdiff(ls(), c("tbl1", mle_obj, "dat_dir", "island", fun_obj)))
 
 
+## MODEL 4: 18 parameters, mean for each population
+sample_n(tbl = tbl1, size = 10)
+table(tbl1$ja_maturity)
+table(tbl1$generation)
 
+# for each population, define juvenile as 0 and adult as 1 in population A,
+# 2 in population B and so on
+table(tbl1$sex)
+mat_by_pop <- function(data, pop, y_col, sex_col) {
+  col_pop <- grepl(pattern = "pop", x = colnames(data))
+  mat_class <- which(LETTERS == pop)
+  one_pop <- data[data[, col_pop] == pop, ]
+  one_pop[, y_col] = mat_class
+  one_pop[one_pop[, sex_col] != "female" & one_pop[, sex_col] != "male", y_col] = 0
+  return(one_pop)
+}
+colnames(tbl1)[10]
+colnames(tbl1)[9]
+tbl1 = as.data.frame(rbindlist(lapply(LETTERS[1:18], FUN = function(x) {
+  mat_by_pop(data = tbl1, pop = x, y_col = 10, sex_col = 9)
+})))
+table(tbl1$maturity)
+head(tbl1)
 
+mean(tbl1[tbl1$maturity==0, "size_log"])
+mean(tbl1[tbl1$maturity==1, "size_log"])
+mean(tbl1[tbl1$maturity==2, "size_log"])
+mean(tbl1[tbl1$maturity==3, "size_log"])
+
+k_classes = names(table(tbl1$maturity))[-1]
+k_pars = "mean"
+(nm_pars = c("slope", as.vector(outer(k_pars, k_classes, paste, sep="."))))
+
+parnames(twoM_oneS) = nm_pars
+
+theta.init = setNames(c(1, rep(2, (length(nm_pars)-1))),  nm_pars)
+colnames(tbl1)[10]
+colnames(tbl1)[11]
+mle.s_mat_2M1S <- mle2(minuslogl = twoM_oneS, start = theta.init,
+                       data = list(data = tbl1, y_col = 10, x_col = 11, sr = 0.05))
+summary(mle.s_mat_2M1S)
+AIC(mle.s_mat_2M1S)
+round(coef(mle.s_mat_2M1S), 2)
+
+table(tbl1[tbl1$pop=="K", "maturity"])
+mle2(minuslogl = twoM_oneS, start = theta.init,
+     data = list(data = tbl1, y_col = 10, x_col = 11, sr = 0.05))
+
+mle.s_mat_po_2M1S = mle.s_mat_2M1S
+rm(mle.s_mat_2M1S)
+tbl1$po_maturity = tbl1$maturity
+table(tbl1$po_maturity)
+
+(mle_obj = ls()[grepl(pattern = "mle.s", x = ls())])
+aic_mat = sapply(mle_obj, function(x) AIC(get(x)))
+data.frame(AIC = aic_mat[order(aic_mat)])
+# which.min(aic_mat)
+(fun_obj = ls()[grepl(pattern = "twoM", x = ls())])
+rm(list = setdiff(ls(), c("tbl1", mle_obj, "dat_dir", "island", fun_obj)))
 
 
 
