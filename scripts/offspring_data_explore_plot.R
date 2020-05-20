@@ -1,8 +1,8 @@
 rm(list = ls())
 
 .packagesdev = "thomasp85/patchwork"
-.packages = c("ggplot2", "dplyr", "reshape2", "parallel", "optparse", "tidyr", "splitstackshape", "data.table", "gdata",
-              "Rmisc", "ggrepel")
+.packages = c("ggplot2", "reshape2", "parallel", "optparse", "tidyr", "splitstackshape", "data.table", "gdata",
+              "Rmisc", "ggrepel", "dplyr")
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
 .instdev <- basename(.packagesdev) %in% installed.packages()
@@ -30,20 +30,21 @@ if (is.null(opt$vcf) | is.null(opt$directory) | is.null(opt$ecotype) | is.null(o
   stop("All arguments must be supplied.\n", call.=FALSE)
 }
 
-island = "CZA"
+island = "CZD"
+dat_dir <- paste0(island, "_off_SW/", island, "_off_raw_data/Littorina_", island)
 # cz_gen = "gen1"
-cz_phen = "boldness"
 if (island=="CZA") {
   dat_dir = "CZA_off_SW/CZA_off_raw_data_renamed"
 } else {
   dat_dir = list.dirs(path = "CZD_off_SW/CZD_off_SW_Oct2016_rawdata")[grepl(pattern = cz_gen,
                                                                             x = list.dirs(path = "CZD_off_SW/CZD_off_SW_Oct2016_rawdata"))]
 }
-(phen_fl = list.files(path = dat_dir, full.names = TRUE)[grepl(pattern = cz_phen, x = list.files(path = dat_dir))])
 
 #########################
 ######## boldness #######
 #########################
+cz_phen = "boldness"
+(phen_fl = list.files(path = dat_dir, full.names = TRUE)[grepl(pattern = cz_phen, x = list.files(path = dat_dir))])
 phen_dt = lapply(1:length(phen_fl), function(x) {
   onedt = read.xls(xls = phen_fl[x], sheet = 1)
   coldt = colnames(onedt)[grepl(pattern = "test", x = colnames(onedt))]
@@ -171,6 +172,23 @@ if (island=="CZA") {
                                                                             x = list.dirs(path = "CZD_off_SW/CZD_off_SW_Oct2016_rawdata"))]
 }
 (phen_fl = list.files(path = dat_dir, full.names = TRUE)[grepl(pattern = cz_phen, x = list.files(path = dat_dir))])
+
+# for CZA/D wild samples #
+phen_dt <- read.csv(file = phen_fl)
+head(phen_dt)
+phen_dt_thick <- mutate(phen_dt, mean_thickness = rowMeans(phen_dt[, 2:4], na.rm = TRUE))
+(cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+nu_phen_fl = tools::file_path_sans_ext(phen_fl)
+cat("Saving final", cz_phen, "data to directory... \n")
+if (island=="CZD") {
+  (nu_phen_dir = paste0(dirname(dirname(dirname(nu_phen_fl))), "/", island, "_off_final_data/Littorina_", island))
+} else {
+  (nu_phen_dir = paste0(dirname(dirname(nu_phen_fl)), "/", island, "_off_final_data"))
+}
+dir.create(nu_phen_dir)
+write.csv(phen_dt_thick, paste0(nu_phen_dir, "/", basename(nu_phen_fl), "_", cdate, ".csv"), row.names = FALSE)
+########################
+
 phen_dt = lapply(1:length(phen_fl), function(x) {
   tmp = read.xls(xls = phen_fl[x], sheet = 1)
   tmp[,2:4] = apply(tmp[, 2:4], MARGIN = 2, FUN = function(x) as.numeric(x))
@@ -202,6 +220,7 @@ lapply(1:length(phen_fl), function(x) {
 })
 
 # rm(list = ls())
+rm(list = setdiff(ls(), c("dat_dir", "island", "nu_phen_dir")))
 #######################
 ######## weight #######
 # TODO:
@@ -217,6 +236,22 @@ if (island=="CZA") {
                                                                             x = list.dirs(path = "CZD_off_SW/CZD_off_SW_Oct2016_rawdata"))]
 }
 (phen_fl = list.files(path = dat_dir, full.names = TRUE)[grepl(pattern = cz_phen, x = list.files(path = dat_dir))])
+
+# for CZA wild samples #
+phen_dt <- read.csv(file = phen_fl)
+head(phen_dt)
+(cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+nu_phen_fl = tools::file_path_sans_ext(phen_fl)
+cat("Saving final", cz_phen, "data to directory... \n")
+if (island=="CZD") {
+  (nu_phen_dir = paste0(dirname(dirname(dirname(nu_phen_fl))), "/", island, "_off_SW_Oct2016_finaldata"))
+} else {
+  (nu_phen_dir = paste0(dirname(dirname(nu_phen_fl)), "/", island, "_off_final_data"))
+}
+dir.create(nu_phen_dir)
+write.csv(phen_dt, paste0(nu_phen_dir, "/", basename(nu_phen_fl), "_", cdate, ".csv"), row.names = FALSE)
+########################
+
 phen_dt = lapply(1:length(phen_fl), function(x) {
   if (island=="CZA") {
     read.xls(xls = phen_fl[x], sheet = 1)[, 1:5]
@@ -244,6 +279,7 @@ lapply(1:length(phen_fl), function(x) {
 })
 
 # rm(list = ls())
+rm(list = setdiff(ls(), c("dat_dir", "island", "nu_phen_dir")))
 ############################
 ######## dissections #######
 ############################
@@ -257,6 +293,13 @@ if (island=="CZA") {
                                                                             x = list.dirs(path = "CZD_off_SW/CZD_off_SW_Oct2016_rawdata"))]
 }
 (phen_fl = list.files(path = dat_dir, full.names = TRUE)[grepl(pattern = cz_phen, x = list.files(path = dat_dir))])
+
+# for CZA wild samples #
+phen_dt <- read.csv(file = phen_fl)
+head(phen_dt)
+# go to "sex" function
+########################
+
 phen_dt = lapply(1:length(phen_fl), function(x) {
   orig = read.xls(xls = phen_fl[x], sheet = 1)
   if (island=="CZD" & cz_gen=="gen0") {
@@ -282,7 +325,10 @@ lapply(phen_dt, str)
 lapply(phen_dt, function(b) table(b[, 'broodpouch']))
 lapply(phen_dt, function(b) table(b[, 'penis']))
 lapply(phen_dt, function(b) table(b[, 'notes']))
+
 #### identify sex of each snail, using brood pouch and penis data ####
+# immatures are treated as juveniles
+# table(phen_dt$notes)
 sex <- function(b, p, isl) {
   if (isl=="CZD" & cz_gen=="gen0") {
     if(b=="Y" & (is.na(b)==F)) y <- "female"
@@ -291,14 +337,58 @@ sex <- function(b, p, isl) {
   } else {
     if(b=="Y" & p=="N" & (is.na(b)==F)) y <- "female"
     if(b=="N" & p=="Y" & (is.na(b)==F)) y <- "male"
-    if(b=="N" & p=="small" & (is.na(b)==F)) y <- "immature"
+    if(b=="N" & p=="small" & (is.na(b)==F)) y <- "juvenile"
     if(b=="N" & p=="N" & (is.na(b)==F) & (is.na(p)==F)) y <- "juvenile"
-    if((b %in% c("Y", "N"))==F | (p %in% c("Y", "N", "small"))==F) y<-"NA"
+    if(b=="Y" & p=="Y" & (is.na(b)==F) & (is.na(p)==F)) y <- "hermaphrodite"
+    if((b %in% c("Y", "N"))==F | (p %in% c("Y", "N", "small"))==F) y <- "NA"
   }
   return(y)
 }
-# sex(b = "Y", p = "small", isl = "CZA")
-# island="CZD"
+sex(b = "N", p = "N", isl = island)
+sex(b = "Y", p = "N", isl = island)
+sex(b = "N", p = "small", isl = island)
+sex(b = "N", p = "Y", isl = island)
+sex(b = "Y", p = "Y", isl = island)
+
+# for CZA/D wild samples #
+colnames(phen_dt)
+dt_na = mutate(phen_dt, sex = apply(phen_dt[, c("brood", "penis")],
+                                    MARGIN = 1, FUN = function(x) sex(b = x[1], p = x[2], isl = island)))
+table(dt_na$sex)
+dt_na <- dt_na[dt_na$sex!="NA", ]
+table(dt_na$trematodes)
+table(dt_na$notes)
+dt_na[dt_na$notes==levels(dt_na$notes)[18], ]
+dt_na$sex <- ifelse(test = dt_na$notes==levels(dt_na$notes)[8], yes = "juvenile", no = dt_na$sex)
+table(dt_na$status_dissection)
+setdiff(as.character(dt_na[dt_na$trematodes=="Y", "snail_ID"]), as.character(dt_na[dt_na$status_dissection=="parasitized", "snail_ID"]))
+dt_nona = dt_na[which(dt_na[, "sex"] != "NA"), ]
+table(dt_nona$trematodes)
+table(dt_nona$status_dissection)
+table(dt_nona$notes)
+dt_nona[dt_nona$notes=="was indicated as male; sex changed later because there is a brood pouch photo",]
+dt_nona$notes <- NULL
+dt_nona = dt_nona[dt_nona[, "trematodes"]!="Y", ]
+dt_nona = dt_nona[dt_nona[, "trematodes"]!="y", ]
+dt_nona$sex_tube <- NULL
+table(dt_nona$sex)
+table(dt_nona$status_dissection)
+setdiff(as.character(dt_nona[dt_nona$sex=="juvenile", "snail_ID"]),
+        as.character(dt_nona[dt_nona$status_dissection=="juvenile", "snail_ID"]))
+dt_nona$status_dissection <- NULL
+dt_nona$sex_dissection <- NULL
+
+(cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
+nu_phen_fl = tools::file_path_sans_ext(phen_fl)
+if (island=="CZD") {
+  (nu_phen_dir = paste0(dirname(dirname(dirname(nu_phen_fl))), "/", island, "_off_SW_Oct2016_finaldata"))
+} else {
+  (nu_phen_dir = paste0(dirname(dirname(nu_phen_fl)), "/", island, "_off_final_data"))
+}
+dir.create(nu_phen_dir)
+write.csv(dt_nona, paste0(nu_phen_dir, "/", basename(nu_phen_fl), "_", cdate, ".csv"), row.names = FALSE)
+########################
+
 phen_sex = lapply(1:length(phen_fl), function(i) {
   if (island=="CZD" & cz_gen=="gen0") {
     phen_dt[[i]][, "penis"] = 0
@@ -343,9 +433,11 @@ lapply(1:length(phen_fl), function(x) {
 # Change from juvenile to immature in excel using notes
 
 # rm(list = ls())
+rm(list = setdiff(ls(), c("dat_dir", "island", "nu_phen_dir")))
 ##########
 ## size ##
 ##########
+# NO for CZA wild samples
 one_phen = "size"
 len_dt = read.xls(xls = "CZA_off_SW/CZA_off_raw_data_renamed/CZoff_length_size_sample1_201501.xlsx", sheet = 1)
 size_dt = read.xls(xls = "CZA_off_SW/CZA_off_raw_data_renamed/CZoff_sample1_size.xlsx", sheet = 1)
@@ -364,6 +456,7 @@ if (identical(len_dt$Size.mm, size_dt$Size.mm)) {
 #################################
 island = "CZA"
 phenos = c("boldness", "dissections", "thickness", "weight", "size", "PCs")
+dat_dir <- paste0(island, "_off_SW/", island, "_off_final_data/Littorina_", island)
 # cz_gen = "gen1"
 if (island=="CZA") {
   dat_dir = "CZA_off_SW/CZA_off_final_data"
@@ -371,7 +464,7 @@ if (island=="CZA") {
   dat_dir = "CZD_off_SW/CZD_off_SW_Oct2016_finaldata"
 }
 phen_fl = lapply(1:length(phenos), function(x) {
-  if (island=="CZD") {
+  if (island=="off_D") {
     list.files(path = dat_dir, pattern = paste0(cz_gen, "_\\d+_", phenos[x]), full.names = TRUE)
   } else {
     list.files(path = dat_dir, pattern = phenos[x], full.names = TRUE)
@@ -399,6 +492,8 @@ colnames(phen_all_dt)
 colnames(phen_all_dt)[which(colnames(phen_all_dt)=="score")] = "bold_score"
 sum(grepl(pattern = "snail", x = colnames(phen_all_dt)))
 sum(grepl(pattern = "sex", x = colnames(phen_all_dt)))
+
+# NO for CZA/D wild samples
 sex_col = colnames(phen_all_dt)[(grepl(pattern = "sex", x = colnames(phen_all_dt)))]
 
 sex_dt = phen_all_dt[, sex_col]
@@ -424,6 +519,15 @@ phen_all_dt[duplicated(phen_all_dt$snail_ID), "snail_ID"] %in% phen_all_dt[which
 
 phen_all_dt$sex = sex_miss[, 3]
 phen_all_dt[phen_all_dt$sex=='missing', ]
+length(unique(phen_all_dt$snail_ID))
+(dup_id <- phen_all_dt[duplicated(as.character(phen_all_dt$snail_ID)), "snail_ID"])
+phen_all_dt[phen_all_dt$snail_ID==dup_id[1], ]
+phen_all_dt[401, ]
+phen_all_dt <- phen_all_dt[-401, ]
+
+phen_all_dt <- phen_all_dt[!is.na(phen_all_dt$snail_ID), ]
+
+sum(grepl(pattern = "O", x = as.character(phen_all_dt$snail_ID)))
 
 (cdate = as.character(as.Date(Sys.time(), "%Y-%m-%d"), "%Y%m%d"))
 if (exists("cz_gen")) {
@@ -432,11 +536,12 @@ if (exists("cz_gen")) {
   write.csv(phen_all_dt, file = paste0(dat_dir, "/", island, "_off_all_phenos_", cdate, ".csv"), row.names = FALSE)
 }
 
-odate = "20200402"
-foo = read.csv(paste0(dat_dir, "/", island, "_off_all_phenos_main_", odate, ".csv"))
-
+# odate = "20200406"
+# foo = read.csv(paste0(dat_dir, "/", island, "_off_all_phenos_main_", odate, ".csv"))
+foo <- read.csv(file = "/Users/samuelperini/Documents/research/projects/1.cz_off/CZA_off_SW/CZA_off_final_data/CZA_all_phenos_main_20200511.csv")
 # foo = read.csv("CZA_off_SW/CZA_off_final_data/CZA_off_all_phenos_main_20191216.csv")
 # colnames(foo)
+phen_all_dt$size_mm <- phen_all_dt$length_mm
 (kcol = intersect(colnames(phen_all_dt), colnames(foo)))
 mdt = phen_all_dt[, which(colnames(phen_all_dt) %in% kcol)]
 # head(mdt)
@@ -447,6 +552,8 @@ if (exists("cz_gen")) {
 } else {
   write.csv(mdt, file = paste0(dat_dir, "/", island, "_off_all_phenos_main_", cdate, ".csv"), row.names = FALSE, quote = FALSE)
 }
+# for CZA wild samples
+# change the name of the file manually
 
 levels(mdt$size_mm)
 is.numeric(mdt$size_mm)
@@ -456,6 +563,61 @@ is.numeric(mdt$size_mm)
 # which(dat_off$size_mm=="")
 # dat_off[1650, ]
 # dat_off[1651, ]
+
+rm(list = setdiff(ls(), c("cdate", "odate", "island", "dat_dir")))
+odate = c("20200406", "20200511")
+CZ = read.csv(paste0(dat_dir, "/", island, "_all_phenos_main_", odate[2], ".csv"))
+OFF = read.csv(paste0(dat_dir, "/", island, "_off_all_phenos_main_", odate[1], ".csv"))
+colnames(CZ)
+CZ <- CZ[, order(colnames(CZ))]
+OFF <- OFF[, order(colnames(OFF))]
+colnames(OFF)
+identical(colnames(OFF), colnames(CZ))
+table(CZ$sex)
+table(OFF$sex)
+# OFF = separate(data = OFF, col = "snail_ID", into = c("pop", "ID"), sep = "_")
+# OFF[, "generation"] = 1
+# OFF[which(nchar(as.character(OFF$ID)) == 2), "generation"] = 0
+# mdat <- rbind()
+
+#######################
+####### spatial #######
+#######################
+raw_dir <- paste0(island, "_off_SW/", island, "_off_raw_data")
+spa_fl <- list.files(raw_dir, pattern = "spatial", full.names = TRUE)
+CZ_spa <- read.csv(spa_fl[1])
+head(CZ_spa)
+head(CZ)
+OFF_spa <- read.csv(spa_fl[2])
+head(OFF_spa)
+head(OFF)
+OFF_spa$snail_ID <- paste(substr(OFF_spa$snail_ID, start = 1, stop = 1), substr(OFF_spa$snail_ID, start = 2, stop = 3),
+                          sep = "_")
+with(data = CZ_spa, plot(X, Y))
+with(data = OFF_spa, plot(x, y))
+
+library(RANN)
+library(magrittr)
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+# closest <- nn2(data = CZ_spa[, c("X", "Y")], query = OFF_spa[, c("x", "y")], k = 1)
+closest <- nn2(data = OFF_spa[, c("x", "y")], query = CZ_spa[, c("X", "Y")], k = 1)
+closest <- sapply(closest, cbind) %>% as_tibble
+closest$X <- OFF_spa[closest$nn.idx, "x"]
+closest$Y <- OFF_spa[closest$nn.idx, "y"]
+head(closest)
+with(data = closest, plot(X, Y))
+OFF_spa$LCmeanDist <- CZ_spa[closest$nn.idx, "LCmeanDist"]
+head(OFF_spa)
+OFF_spa = separate(data = OFF_spa, col = "snail_ID", into = c("pop", "ID"), sep = "_")
+closest$pop <- OFF_spa$pop
+ggplot(data = closest) +
+  geom_point(aes(x = X, y = Y, col = factor(pop)))
+
+aggregate(x = OFF_spa$LCmeanDist, by = list(pop = OFF_spa$pop), mean)
+
 
 # rm(list = ls())
 #######################

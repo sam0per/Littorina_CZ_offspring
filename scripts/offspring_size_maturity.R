@@ -647,7 +647,7 @@ data.frame(AIC = aic_mat[order(aic_mat)])
 rm(list = setdiff(ls(), c("tbl1", mle_obj, "dat_dir", "island", fun_obj)))
 
 
-## MODEL 4: 18 parameters, mean for each population
+## MODEL 4: for each generation, one model per population
 sample_n(tbl = tbl1, size = 10)
 table(tbl1$ja_maturity)
 table(tbl1$generation)
@@ -676,36 +676,53 @@ mean(tbl1[tbl1$maturity==1, "size_log"])
 mean(tbl1[tbl1$maturity==2, "size_log"])
 mean(tbl1[tbl1$maturity==3, "size_log"])
 
-k_classes = names(table(tbl1$maturity))[-1]
-k_pars = "mean"
-(nm_pars = c("slope", as.vector(outer(k_pars, k_classes, paste, sep="."))))
-
-parnames(twoM_oneS) = nm_pars
-
-theta.init = setNames(c(1, rep(2, (length(nm_pars)-1))),  nm_pars)
-colnames(tbl1)[10]
-colnames(tbl1)[11]
-mle.s_mat_2M1S <- mle2(minuslogl = twoM_oneS, start = theta.init,
-                       data = list(data = tbl1, y_col = 10, x_col = 11, sr = 0.05))
-summary(mle.s_mat_2M1S)
-AIC(mle.s_mat_2M1S)
-round(coef(mle.s_mat_2M1S), 2)
-
-table(tbl1[tbl1$pop=="K", "maturity"])
-mle2(minuslogl = twoM_oneS, start = theta.init,
-     data = list(data = tbl1, y_col = 10, x_col = 11, sr = 0.05))
-
-mle.s_mat_po_2M1S = mle.s_mat_2M1S
-rm(mle.s_mat_2M1S)
-tbl1$po_maturity = tbl1$maturity
-table(tbl1$po_maturity)
-
 (mle_obj = ls()[grepl(pattern = "mle.s", x = ls())])
-aic_mat = sapply(mle_obj, function(x) AIC(get(x)))
-data.frame(AIC = aic_mat[order(aic_mat)])
-# which.min(aic_mat)
-(fun_obj = ls()[grepl(pattern = "twoM", x = ls())])
-rm(list = setdiff(ls(), c("tbl1", mle_obj, "dat_dir", "island", fun_obj)))
+(fun_obj = ls()[grepl(pattern = "^oneM|^twoM", x = ls())])
+(dat_obj = ls()[grepl(pattern = "^tbl1|^out", x = ls())])
+rm(list = setdiff(ls(), c(dat_obj, mle_obj, "dat_dir", "island", fun_obj)))
+
+oneM <- function(x_var, y_var, slope, beta) {
+  logit_p <- (x_var - beta[1]) / slope
+  p <- exp(logit_p) / (exp(logit_p)+1)
+  minusll <- -sum(dbinom(y_var, 1, p, log = TRUE))
+  return(minusll)
+}
+
+genx = 1
+tbl_1gen = tbl1[tbl1$generation==genx, ]
+
+out_1gen = matrix(nrow = length(unique(tbl_1gen$pop)), ncol = 2)
+mode(out_1gen) = "numeric"
+colnames(out_1gen) = c("mean", "SE")
+
+round(coef(mle.s_mat_nout)['slope'], 2)
+for (i in 1:length(unique(tbl_1gen$pop))) {
+  # i = 2
+  tank = LETTERS[i]
+  tbl1_test = tbl_1gen[tbl_1gen$pop==tank, ]
+  k_classes = names(table(tbl1_test$maturity))
+  k_pars = "mean"
+  nm_pars = as.vector(outer(k_pars, k_classes, paste, sep="."))
+  if (length(nm_pars) == 2) {
+    cat("Population", tank, "of generation", genx, "contains juveniles. \n")
+    nm_pars = nm_pars[2]
+  }
+  cat("Parameters for population", tank, "in generation", genx, "are", nm_pars, "\n")
+  parnames(oneM) = nm_pars
+  theta.init = setNames(rep(1, length(nm_pars)),  nm_pars)
+  tbl1_test$maturity = ifelse(tbl1_test$maturity > 0, 1, 0)
+  mle.s_mat_1M1S <- mle2(minuslogl = oneM, start = theta.init,
+                         data = list(x_var = tbl1_test$size_log, y_var = tbl1_test$maturity,
+                                     slope = 0.18))
+  
+  out_1gen[as.integer(k_classes), 1] = round(coef(mle.s_mat_1M1S), 2)
+  out_1gen[as.integer(k_classes), 2] = round(summary(mle.s_mat_1M1S)@coef[, "Std. Error"], 2)
+  rm(mle.s_mat_1M1S)
+}
+
+(out_1gen = data.frame(genx = genx, pop = LETTERS[1:length(unique(tbl_1gen$pop))],
+                       out_1gen))
+
 
 
 

@@ -1,7 +1,8 @@
 rm(list = ls())
 
-.packages = c("optparse", "dplyr", "tidyr", "knitr", "kableExtra", "ggrepel", "RColorBrewer",
-              "flextable", "officer", "ggcorrplot", "data.table", "car", "MASS", "ggplot2", "rstan", "shinystan")
+.packages = c("optparse", "tidyr", "knitr", "kableExtra", "ggrepel", "RColorBrewer",
+              "flextable", "officer", "ggcorrplot", "data.table", "car", "MASS", "ggplot2",
+              "rstan", "shinystan", "dplyr")
 # Install CRAN packages (if not already installed)
 .inst <- .packages %in% installed.packages()
 if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
@@ -28,7 +29,7 @@ tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID", "sex")]
 rm(dat_off)
 
 # define which phenotype to analyse together with size
-one_phen = c(off_phen[3], "size_mm")
+one_phen = c(off_phen[2], "size_mm")
 genx = c("0", "1")
 # scale the data
 mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
@@ -81,17 +82,26 @@ head(mod_dat)
 ## model all samples combined
 col_genx = c("#5e3c99", "#e66101")
 frmls = c(paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * pop * generation"),
+          paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * pop + generation"),
           paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * pop"),
-          paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * generation"))
+          paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * generation"),
+          paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * generation + pop"))
 # times_pop_gen.lm = lm(scaled_weight_cuberoot ~ scaled_size_mm * pop * generation, data = mod_dat)
 # times_pop_all.lm = lm(scaled_weight_cuberoot ~ scaled_size_mm * pop, data = mod_dat)
 # times_gen_all.lm = lm(scaled_weight_cuberoot ~ scaled_size_mm * generation, data = mod_dat)
 times_pop_gen.lm = lm(formula = frmls[1], data = mod_dat)
-times_pop_all.lm = lm(formula = frmls[2], data = mod_dat)
-times_gen_all.lm = lm(formula = frmls[3], data = mod_dat)
+times_pop.gen.lm = lm(formula = frmls[2], data = mod_dat)
+times_pop_all.lm = lm(formula = frmls[3], data = mod_dat)
+times_gen_all.lm = lm(formula = frmls[4], data = mod_dat)
+times_gen.pop.lm = lm(formula = frmls[5], data = mod_dat)
+mod.lm = ls()[grepl(pattern = ".lm$", x = ls())]
+aic.lm = sapply(mod.lm, function(x) AIC(get(x)))
+aic.lm[order(aic.lm)]
 (aic.low = frmls[which.min(c(AIC(times_pop_gen.lm),
+                             AIC(times_pop.gen.lm),
                              AIC(times_pop_all.lm),
-                             AIC(times_gen_all.lm)))])
+                             AIC(times_gen_all.lm),
+                             AIC(times_gen.pop.lm)))])
 
 # plot best fit (model with the lowest AIC) onto the data
 best_plot <- ggplot(mod_dat, aes_string(x = paste0('scaled_', one_phen[2]), y = paste0('scaled_', one_phen[1]))) +
@@ -123,9 +133,11 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
        plot=fit_plot, width=10, height=8)
 
 ## model with separate generations
+rm(list = setdiff(ls(), c("mod_dat", "dat_dir", "genx", "island", "one_phen", "res_dir", "col_genx", "col_phen")))
 # change the next variable with either 0 or 1
-one_gen = 1
+one_gen = 0
 one_dat = mod_dat[mod_dat$generation==one_gen, ]
+head(one_dat)
 # reminder about which phenotypes we are analysing
 colnames(mod_dat)[col_phen]
 
@@ -176,7 +188,7 @@ aic.lm[order(aic.lm[, paste0("AIC_gen", one_gen)]),]
 
 col_mat = c("#1b9e77", "#e7298a")
 # define which variable to use for plot colours (e.g., "pop" or "maturity")
-col_mod = "pop"
+col_mod = "maturity"
 # plot best fit (model with the lowest AIC) onto the data
 best_plot <- ggplot(one_dat, aes_string(x = paste0('scaled_', one_phen[2]), y = paste0('scaled_', one_phen[1]))) +
   labs(y = paste0('scaled_', one_phen[1]), x = paste0('scaled_', one_phen[2]),
@@ -192,13 +204,20 @@ best_plot <- ggplot(one_dat, aes_string(x = paste0('scaled_', one_phen[2]), y = 
         legend.text = element_text(size = 14), legend.title = element_text(size = 14),
         title = element_text(size = 13))
 
-(fit_plot = best_plot +
+(fit_plot = if (col_mod=="maturity") {
+  best_plot +
     # only if col_mod is "maturity"
-    # facet_wrap(col_mod) +
+    facet_wrap(~pop) +
+    geom_smooth(method = "lm", se = TRUE, alpha = 0.2) +
+    geom_point(aes_string(col = col_mod), alpha = 0.5) +
+    # only if col_mod is "maturity"
+    scale_color_manual(values = col_mat) + scale_fill_manual(values = col_mat)
+} else {
+  best_plot +
+    facet_wrap(~pop) +
     geom_smooth(method = "lm", se = TRUE, aes_string(col = col_mod, fill = col_mod), alpha = 0.2) +
-    geom_point(aes_string(col = col_mod), alpha = 0.5))
-    # only if col_mod is "maturity"
-    # scale_color_manual(values = col_mat) + scale_fill_manual(values = col_mat))
+    geom_point(aes_string(col = col_mod), alpha = 0.5)
+})
 # summary(add_mat_pop.lm)
 # summary(times_mat_pop.lm)
 # save figures
@@ -229,6 +248,9 @@ if (grepl(pattern = "maturity", x = aic.low)) {
                         generation = one_gen)
 }
 one_pred$sd.fit = one_pred$se.fit * sqrt(one_pred$N)
+one_coef = data.frame(parameter = names(coef(times_pop.lm)),
+                      summary(times_pop.lm)$coefficients[, 1:2],
+                      generation = one_gen)
 # test for the function predict
 coef(times_pop.lm)
 coef(times_pop.lm)[1] + coef(times_pop.lm)[2] * mean(mod_dat$scaled_size_mm)
@@ -240,18 +262,30 @@ dir.create(paste0(dirname(dat_dir), "/", island, "_off_results"))
 res_dir = paste0(dirname(dat_dir), "/", island, "_off_results")
 dir.create(paste0(res_dir, "/tables"))
 if (file.exists(paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))) {
-  write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"),
-              quote = FALSE, row.names = FALSE, append = TRUE, col.names = FALSE, sep = ",")
+  infl = read.csv(file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
+  if (length(table(infl$generation)) < 2) {
+    write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"),
+                quote = FALSE, row.names = FALSE, append = TRUE, col.names = FALSE, sep = ",")
+    write.table(x = one_coef,
+                file = paste0(res_dir, "/tables/", island, "_off_lm_coef_", one_phen[1], ".csv"),
+                quote = FALSE, row.names = FALSE, append = TRUE, col.names = FALSE, sep = ",")
+  }
 } else {
   file.create(paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
   write.table(x = one_pred, file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"),
               quote = FALSE, row.names = FALSE, append = TRUE, col.names = TRUE, sep = ",")
+  file.create(paste0(res_dir, "/tables/", island, "_off_lm_coef_", one_phen[1], ".csv"))
+  write.table(x = one_coef,
+              file = paste0(res_dir, "/tables/", island, "_off_lm_coef_", one_phen[1], ".csv"),
+              quote = FALSE, row.names = FALSE, append = TRUE, col.names = TRUE, sep = ",")
 }
 
 # scatterplot lab vs wild size-adjusted phenotype
-rm(list=setdiff(ls(), c("mod_dat", "dat_dir", "genx", "island", "one_gen", "one_phen", "res_dir")))
+aic.low
+rm(list=setdiff(ls(), c("times_pop.lm", "mod_dat", "aic.low", "col_genx", "dat_dir",
+                        "genx", "island", "one_phen", "res_dir")))
+
 pred_dat = read.csv(file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
-col_genx = c("#5e3c99", "#e66101")
 ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
   geom_abline(slope = 1, linetype = "dashed") +
   geom_point(aes(x = fit, y = pred_dat[pred_dat$generation==1, "fit"]),
@@ -301,11 +335,62 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
        plot=pred_plot, width=10, height=8)
 ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_adjusted_", one_phen[1], ".pdf"),
        plot=pred_plot, width=10, height=8)
+rm(pred_plot)
 
+## boxplot of the regression coefficients of wild and lab samples
+coef_dat = read.csv(file = paste0(res_dir, "/tables/", island, "_off_lm_coef_", one_phen[1], ".csv"))
+head(coef_dat)
+coef_dat$variance <- coef_dat$Std..Error^2
 
-# summary best fit
-round(summary(bypop.lm[[1]])$coefficients, 3)
-names(bypop.lm[[1]]$coefficients)[2] = paste0('scaled_', one_phen[2])
+# calculate regression coefficients for each population (i.e., reference slope + population slope)
+calc_regr <- function(data, par_col, grp, beta_ref) {
+  grp_name <- deparse(substitute(grp))
+  data[, par_col] <- as.character(data[, par_col])
+  par1 <- data[data[, par_col] == beta_ref, ]
+  par_betas <- data[grepl(pattern = paste0(beta_ref, ":"), x = data[, par_col]), ]
+  out_regr <- matrix(nrow = nrow(par1) + nrow(par_betas), ncol = ncol(par_betas))
+  colnames(out_regr) <- colnames(par_betas)
+  out_regr <- as.data.frame(out_regr)
+  out_regr[, grp_name] <- c(par1[, grp_name], par_betas[, grp_name])
+  out_regr[1:nrow(par1), ] <- par1
+  for (i in 1:nrow(par1)) {
+    a_grp <- par1[i, grp_name]
+    par_grp <- par_betas[par_betas[, grp_name] == a_grp, ]
+    out_regr[out_regr[, grp_name] == a_grp, ][-1, par_col] <- par_grp[, par_col]
+    out_regr[out_regr[, grp_name] == a_grp, ][-1, "Estimate"] <- par1[i, "Estimate"] + par_grp[, "Estimate"]
+    out_regr[out_regr[, grp_name] == a_grp, ][-1, "variance"] <- par1[i, "variance"] + par_grp[, "variance"]
+  }
+  return(out_regr)
+}
+regr_dat <- calc_regr(data = coef_dat, par_col = 1, grp = generation, beta_ref = paste0("scaled_", one_phen[2]))
+regr_dat$sd <- sqrt(regr_dat$variance)
+regr_dat[regr_dat$generation==0, "pop"] <- unique(mod_dat[mod_dat$generation==0, "pop"])
+regr_dat[regr_dat$generation==1, "pop"] <- unique(mod_dat[mod_dat$generation==1, "pop"])
+regr_dat$parameter <- NULL
+write.csv(x = regr_dat, file = paste0(res_dir, "/tables/", island, "_off_slopes_", one_phen[1], ".csv"),
+          quote = FALSE, row.names = FALSE)
+
+(regr_plot = ggplot(data = regr_dat, aes(x = pop, y = Estimate, col = factor(generation))) +
+    geom_point(position = position_dodge(0.9), size = 3) +
+    geom_errorbar(aes(ymin = (Estimate - sd), ymax = (Estimate + sd)), size = 0.5, position = position_dodge(0.9)) +
+    scale_color_manual(values = col_genx) +
+    labs(x = "", y = paste0(one_phen[1], " regression coef."), col = "generation") +
+    theme(legend.position = "top", legend.text = element_text(size = 11), legend.title = element_text(size = 14),
+          axis.title.y = element_text(size = 14),
+          axis.text = element_text(size = 11),
+          # axis.ticks = element_line(size = 0.5),
+          panel.background = element_blank(),
+          strip.background=element_rect(fill="#91bfdb"),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2)))
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_slopes_", one_phen[1], ".svg"),
+       plot=regr_plot, width=10, height=8)
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_slopes_", one_phen[1], ".pdf"),
+       plot=regr_plot, width=10, height=8)
+rm(regr_plot)
+
 
 ## test for sampling time effect
 # prepare data
@@ -341,6 +426,7 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
        plot=e2, width=10, height=8)
 ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_boxplot_scaled_", one_phen[1], ".pdf"),
        plot=e2, width=10, height=8)
+
 
 ## weight variation explained by thickness
 # correlation of the adjusted means and regression coefficients
