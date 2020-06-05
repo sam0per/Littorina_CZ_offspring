@@ -28,20 +28,57 @@ off_phen = c("bold_score", "mean_thickness", "weight_cuberoot", "PC2")
 tbl1 = dat_off[, c(off_phen, "size_mm", "generation", "pop", "ID", "sex")]
 rm(dat_off)
 
-# define which phenotype to analyse together with size
-one_phen = c(off_phen[2], "size_mm")
+# define which phenotype to analyse either together with size (thickness and weight) or
+# independetly of size (boldness and shape)
+off_phen
+# one_phen = "bold_score"
+one_phen = c(off_phen[3], "size_mm")
 genx = c("0", "1")
 # scale the data
-mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
-sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
-scaled_phen = lapply(genx, function(x) {
-  one_dt = tbl1[tbl1$generation==x, c(one_phen, 'pop', 'ID', 'sex')]
-  outna_dt = one_dt[complete.cases(one_dt), ]
-  outna_dt[, paste0('scaled_', one_phen[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
-  outna_dt[, paste0('scaled_', one_phen[2])] = (outna_dt[,2] - mean_x0[2]) / sd_x0[2]
-  return(outna_dt)
-})
-col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
+if (length(one_phen) < 2) {
+  mean_x0 = mean(tbl1[tbl1$generation==0, one_phen], na.rm=TRUE)
+  sd_x0 = sd(tbl1[tbl1$generation==0, one_phen], na.rm=TRUE)
+} else {
+  mean_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) mean(x, na.rm=TRUE))
+  sd_x0 = apply(X = tbl1[tbl1$generation==0, one_phen], MARGIN = 2, FUN = function(x) sd(x, na.rm=TRUE))
+}
+
+scaling <-  function(grp, trt) {
+  out <- tryCatch(
+    {
+      one_dt <- tbl1[tbl1$generation==grp, c(trt, 'pop', 'ID', 'sex')]
+      outna_dt = one_dt[complete.cases(one_dt), ]
+      outna_dt[, paste0('scaled_', trt[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
+      outna_dt[, paste0('scaled_', trt[2])] = (outna_dt[,2] - mean_x0[2]) / sd_x0[2]
+      return(outna_dt)
+    },
+    # Handler when a warning occurs:
+    warning = function(cond) {
+      message("Here's the original warning message:")
+      message(cond)
+      
+      # Choose a return value when such a type of condition occurs
+      return(NULL)
+    },
+    # Handler when an error occurs:
+    error = function(cond) {
+      message("Here's the original error message:")
+      message(cond)
+      
+      # Choose a return value when such a type of condition occurs
+      outna_dt[, paste0('scaled_', trt[1])] = (outna_dt[,1] - mean_x0[1]) / sd_x0[1]
+      return(outna_dt)
+    },
+    finally = {
+      message(paste("Scaled phenotype(s) in group", grp, ":", paste(trt, collapse = " ")))
+    }
+  )
+  return(out)
+}
+scaled_phen <- lapply(genx, FUN = function(x) scaling(grp = x, trt = one_phen))
+lapply(scaled_phen, head)
+head(tbl1)
+# col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
 
 # lapply(seq_along(genx), function(x) hist(scaled_phen[[x]][, col_phen[1]]))
 # lapply(seq_along(genx), function(x) hist(scaled_phen[[x]][, col_phen[2]]))
@@ -51,7 +88,7 @@ col_phen = c(ncol(scaled_phen[[1]]) - 1, ncol(scaled_phen[[1]]))
 # lapply(seq_along(genx), function(x) qqp(scaled_phen[[x]][, col_phen[2]], "lnorm"))
 
 ## model fitting
-# prepare data for maturity models
+# prepare data
 scaled_phen[[1]]$generation = 0
 scaled_phen[[2]]$generation = 1
 lapply(seq_along(genx), function(x) {
@@ -79,6 +116,62 @@ head(mod_dat)
 # table(W_dat$pop)
 # rm(mod_dat)
 
+# boxplot to check for outliers
+head(mod_dat)
+out_phen <- one_phen[2]
+(p3 = ggplot(data = mod_dat, aes_string(x = "pop", y = out_phen, fill = "pop")) +
+    facet_wrap(~maturity) +
+    geom_boxplot(position = position_dodge(0.9), notch = FALSE) +
+    labs(x = "", fill = "") +
+    theme(legend.position = "null", legend.text = element_text(size = 11),
+          axis.title.y = element_text(size = 14),
+          axis.text = element_text(size = 11),
+          panel.background = element_blank(),
+          strip.background = element_rect(fill = "#91bfdb"),
+          strip.text = element_text(size = 11),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2)))
+# remove outlying samples in each maturity class
+# it is done across populations and not for each population separately
+table(mod_dat$maturity)
+no_out <- rbindlist(lapply(names(table(mod_dat$maturity)), FUN = function(x) {
+  m1 <- mean(mod_dat[mod_dat$maturity==x, out_phen])
+  var_name <- mod_dat[mod_dat$maturity==x, out_phen]
+  outlier <- boxplot.stats(var_name)$out
+  mo <- mean(outlier)
+  var_name <- ifelse(var_name %in% outlier, NA, var_name)
+  m2 <- mean(var_name, na.rm = T)
+  cat("Mean", x, out_phen, "without removing", x, "outliers:", round(m1, 2), "\n")
+  cat("Mean", x, out_phen, "if we remove", sum(is.na(var_name)), x, "outliers:", round(m2, 2), "\n")
+  
+  tbl1b = mod_dat
+  tbl1b[tbl1b$maturity==x, out_phen] = var_name
+  mean(mod_dat[mod_dat$maturity==x, out_phen])
+  mean(tbl1b[tbl1b$maturity==x, out_phen], na.rm = TRUE)
+  tbl1b = tbl1b[!is.na(tbl1b[, out_phen]), ]
+  cat("Total mean without removing", x, out_phen, "outliers:", round(mean(mod_dat[, out_phen]), 2), "\n")
+  cat("Total mean if we remove", sum(is.na(var_name)), x, out_phen, "outliers:", round(mean(tbl1b[, out_phen]), 2), "\n")
+  list_dt_nout = tbl1b[tbl1b$maturity==x, ]
+  return(list_dt_nout)
+}))
+(p3_nout <- ggplot(data = no_out, aes_string(x = "pop", y = out_phen, fill = "pop")) +
+    facet_wrap(~maturity) +
+    geom_boxplot(position = position_dodge(0.9), notch = FALSE) +
+    labs(x = "", fill = "") +
+    theme(legend.position = "null", legend.text = element_text(size = 11),
+          axis.title.y = element_text(size = 14),
+          axis.text = element_text(size = 11),
+          panel.background = element_blank(),
+          strip.background = element_rect(fill = "#91bfdb"),
+          strip.text = element_text(size = 11),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2)))
+
+mod_dat <- no_out
 ## model all samples combined
 col_genx = c("#5e3c99", "#e66101")
 frmls = c(paste0("scaled_", one_phen[1], " ~ scaled_", one_phen[2], " * pop * generation"),
@@ -231,6 +324,37 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
 
 # predict phenotype at the overall mean size
 aic.low
+head(mod_dat)
+ggplot(data = mod_dat) +
+  facet_wrap(~pop) +
+  geom_point(aes_string(x = one_phen[2], y = one_phen[1], col=factor(mod_dat$generation)),
+             size=1) +
+  scale_colour_manual(values = c("#5e3c99", "#e66101")) +
+  labs(col = "generation") +
+  theme(legend.position = "top", legend.text = element_text(size = 12), legend.title = element_text(size = 14),
+        # plot.title = element_text(size = 19, hjust = 0.5),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size=10),
+        axis.ticks = element_line(size = 0.5),
+        panel.background = element_blank(),
+        strip.background=element_rect(fill="#91bfdb"), strip.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line = element_line(size = 0.2, linetype = "solid",
+                                 colour = "black"),
+        panel.grid = element_line(colour = "gray70", size = 0.2))
+pred_dat <- data.frame(predict(times_pop_gen.lm, data.frame(scaled_size_mm = mean(mod_dat$scaled_size_mm),
+                                                            pop = mod_dat$pop,
+                                                            generation = mod_dat$generation), se.fit = TRUE)[c("fit", "se.fit")],
+                       pop = mod_dat$pop,
+                       generation = mod_dat$generation)
+head(pred_dat)
+
+ad_dt <- mod_dat[mod_dat$maturity=="adult", ]
+pred_dat <- data.frame(predict(times_pop_gen.lm, data.frame(scaled_size_mm = mean(ad_dt$scaled_size_mm),
+                                                            pop = rep(unique(as.character(ad_dt$pop)), 2),
+                                                            generation = c(rep(0,18), rep(1,18))), se.fit = TRUE)[c("fit", "se.fit")],
+                       pop = rep(unique(as.character(ad_dt$pop)), 2),
+                       generation = c(rep(0,18), rep(1,18)))
 # summary(times_pop.lm)
 if (grepl(pattern = "maturity", x = aic.low)) {
   one_pred = data.frame(predict(add_mat_pop.lm, data.frame(scaled_size_mm = mean(mod_dat$scaled_size_mm),
@@ -241,8 +365,8 @@ if (grepl(pattern = "maturity", x = aic.low)) {
                         pop = rep(unique(one_dat$pop), 2),
                         generation = one_gen)
 } else {
-  one_pred = data.frame(predict(times_pop.lm, data.frame(scaled_size_mm = mean(mod_dat$scaled_size_mm),
-                                                         pop = unique(as.character(one_dat$pop))), se.fit = TRUE)[c("fit", "se.fit")],
+  one_pred = data.frame(predict(times_pop_gen.lm, data.frame(scaled_size_mm = mean(mod_dat$scaled_size_mm),
+                                                             pop = unique(as.character(one_dat$pop))), se.fit = TRUE)[c("fit", "se.fit")],
                         N = as.vector(table(one_dat$pop)),
                         pop = unique(one_dat$pop),
                         generation = one_gen)
@@ -286,7 +410,8 @@ rm(list=setdiff(ls(), c("times_pop.lm", "mod_dat", "aic.low", "col_genx", "dat_d
                         "genx", "island", "one_phen", "res_dir")))
 
 pred_dat = read.csv(file = paste0(res_dir, "/tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
-ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
+pred_dat <- pred_dat[pred_dat$pop!="A", ]
+ggplot(data = pred_dat[pred_dat$generation==0, ]) +
   geom_abline(slope = 1, linetype = "dashed") +
   geom_point(aes(x = fit, y = pred_dat[pred_dat$generation==1, "fit"]),
              size=3) +
@@ -299,11 +424,11 @@ ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
                      xmax = (fit + se.fit)),
                  size = 0.3, height = 0.005) +
   geom_label_repel(aes(x = fit, y = pred_dat[pred_dat$generation==1, "fit"],
-                       label = LETTERS[2:18]),
+                       label = unique(pred_dat$pop)),
                    box.padding   = 0.35, 
                    point.padding = 0.5,
                    segment.color = 'grey50') +
-  labs(title = paste0("Size-adjusted ", one_phen[1]), x = "wild sample", y = "lab-reared sample") +
+  labs(title = paste0("Size-adjusted ", one_phen[1]), x = "parents", y = "lab-reared adults") +
   theme(legend.position = "none",
         plot.title = element_text(size = 19, hjust = 0.5),
         axis.title = element_text(size = 18),
@@ -316,6 +441,7 @@ ggplot(data = pred_dat[pred_dat$generation==0 & pred_dat$pop!="A", ]) +
         panel.grid = element_line(colour = "gray70", size = 0.2))
 
 # boxplot wild and sample size_adjusted phenotype
+head(pred_dat)
 (pred_plot = ggplot(data = pred_dat, aes(x = pop, y = fit, col = factor(generation))) +
   geom_point(position = position_dodge(0.9), size = 3) +
   geom_errorbar(aes(ymin = (fit - se.fit), ymax = (fit + se.fit)), size = 0.5, position = position_dodge(0.9)) +
@@ -533,10 +659,93 @@ best_plot <- ggplot(one_dat, aes_string(x = paste0('scaled_', one_phen[2]), y = 
 
 
 ## Plasticity analysis
-# Size-adjusted means after scaling
-rm(list = setdiff(ls(), c("island", "one_phen")))
+# Boldness
+head(no_out)
+table(no_out[no_out$generation==0, "maturity"])
+x_meas <- no_out[no_out$generation==0 & no_out$maturity=="adult", ]
+x_meas <- aggregate(x = x_meas$scaled_bold_score, by = list(pop = x_meas$pop),
+                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+
+table(no_out[no_out$generation==1, "maturity"])
+y_meas <- no_out[no_out$generation==1 & no_out$maturity=="adult", ]
+y_meas <- aggregate(x = y_meas$scaled_bold_score, by = list(pop = y_meas$pop),
+                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
+
+pop_diff <- setdiff(x_meas$pop, y_meas$pop)
+if (length(pop_diff) != 0) {
+  x_meas <- x_meas[x_meas$pop!=pop_diff, ]
+}
+
+stanfile = "Littorina_offspring/scripts/offspring_err_in_var_model.stan"
+writeLines(readLines(stanfile))
+rstan_options(auto_write = TRUE)
+# options(mc.cores = 4)
+options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
+dat = list(N = nrow(x_meas), x = x_meas$x[, "mean"], sd_x = x_meas$x[, "sd"],
+           y = y_meas$x[, "mean"], sd_y = y_meas$x[, "sd"])
+err_in_var <- rstan::stan(file = stanfile,
+                          data = dat, iter = 12000, warmup = 4000,
+                          chains=4, refresh=12000,
+                          control = list(stepsize = 0.01, adapt_delta = 0.99, max_treedepth = 15))
+
 res_dir = paste0(island, "_off_SW/", island, "_off_results/")
-pred_dat = read.csv(file = paste0(res_dir, "tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
+dir.create(paste0(res_dir, "models"))
+dir.create(paste0(res_dir, "tables"))
+
+saveRDS(err_in_var, paste0(res_dir, "models/", island, "_err_in_var_", one_phen, ".rds"))
+# err_in_var = readRDS(paste0(res_dir, "models/", island, "_err_in_var.rds"))
+
+# launch_shinystan(err_in_var)
+# pairs(err_in_var)
+pars = c("alpha", "beta", "sigma")
+# pars = c("alpha", "beta")
+pdf(file = paste0(dirname(res_dir), "/", island, "_off_final_figures/", island, "_off_err_in_var_pairs_", one_phen, ".pdf"),
+    width = 8, height = 8)
+pairs(err_in_var, pars = pars, include = TRUE)
+dev.off()
+# print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
+print(err_in_var, pars = pars, digits=3)
+
+# postd = extract(err_in_var)
+# names(postd)
+# dim(postd$alpha)
+stbl = rstan::summary(err_in_var)
+write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_", one_phen, ".csv"))
+
+# plasticty plot
+(pp <- ggplot() +
+  geom_abline(slope = 1, linetype="dashed") +
+  geom_point(aes(x = x_meas$x[, "mean"], y = y_meas$x[, "mean"]),
+             size=3) +
+  geom_label_repel(aes(x = x_meas$x[, "mean"], y = y_meas$x[, "mean"],
+                       label = x_meas$pop),
+                   box.padding   = 0.35, 
+                   point.padding = 0.5,
+                   segment.color = 'grey50') +
+  geom_point(aes(x = stbl$summary[1:nrow(x_meas), "mean"], y = stbl$summary[(nrow(x_meas)+1):(nrow(x_meas)*2), "mean"]),
+             size=3, col="red") +
+  labs(title = one_phen, x = "parents", y = "lab-reared adults") +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 19, hjust = 0.5),
+        axis.title = element_text(size = 18),
+        axis.text = element_text(size=11),
+        axis.ticks = element_line(size = 0.7),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+        axis.line = element_line(size = 0.2, linetype = "solid",
+                                 colour = "black"),
+        panel.grid = element_line(colour = "gray70", size = 0.2)))
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_plasticity_", one_phen, ".svg"),
+       plot=pp, width=10, height=8)
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_plasticity_", one_phen, ".pdf"),
+       plot=pp, width=10, height=8)
+
+
+# Size-adjusted means after scaling
+pred_dat
+# rm(list = setdiff(ls(), c("island", "one_phen")))
+res_dir = paste0(island, "_off_SW/", island, "_off_results/")
+# pred_dat = read.csv(file = paste0(res_dir, "tables/", island, "_off_size_adjusted_", one_phen[1], ".csv"))
 # col_genx = c("#5e3c99", "#e66101")
 
 diff_pop = names(table(pred_dat$pop))[table(pred_dat$pop)<2]
@@ -555,12 +764,11 @@ y_meas = mod_dat[mod_dat$generation==1, ]
 # nums <- unlist(lapply(y_meas, is.numeric))
 # y_meas_ppt = round(y_meas[, nums], 2)
 
-dat = list(N = nrow(x_meas), x = x_meas$fit, sd_x = x_meas$sd.fit, y = y_meas$fit)
+dat = list(N = nrow(x_meas), x = x_meas$fit, sd_x = x_meas$se.fit, y = y_meas$fit, sd_y = y_meas$se.fit)
 err_in_var <- rstan::stan(file = stanfile,
                           data = dat, iter = 12000, warmup = 4000,
                           chains=4, refresh=12000,
                           control = list(stepsize = 0.01, adapt_delta = 0.99, max_treedepth = 15))
-
 
 dir.create(paste0(res_dir, "models"))
 dir.create(paste0(res_dir, "tables"))
@@ -572,7 +780,7 @@ saveRDS(err_in_var, paste0(res_dir, "models/", island, "_err_in_var.rds"))
 # pairs(err_in_var)
 pars = c("alpha", "beta", "sigma")
 # pars = c("alpha", "beta")
-pdf(file = paste0(dirname(res_dir), "/", island, "_off_final_figures/", island, "_off_err_in_var_pairs.pdf"),
+pdf(file = paste0(dirname(res_dir), "/", island, "_off_final_figures/", island, "_off_err_in_var_pairs_adj-",one_phen[1],".pdf"),
     width = 8, height = 8)
 pairs(err_in_var, pars = pars, include = TRUE)
 dev.off()
@@ -584,10 +792,37 @@ print(err_in_var, pars = pars, digits=3)
 # dim(postd$alpha)
 
 stbl = rstan::summary(err_in_var)
-write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit.csv"))
+write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_adj-", one_phen[1], ".csv"))
 # xtable::xtable(stbl$summary)
 # xtable::xtable(stbl)
 
 plot(x_meas$x[, 'mean'], stbl$summary[grepl(pattern = "mu_yhat", x = row.names(stbl$summary)), 'mean'], col='red', pch=19)
 points(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
 
+# plasticty plot
+(pp <- ggplot() +
+    geom_abline(slope = 1, linetype="dashed") +
+    geom_point(aes(x = x_meas$fit, y = y_meas$fit),
+               size=3) +
+    geom_label_repel(aes(x = x_meas$fit, y = y_meas$fit,
+                         label = x_meas$pop),
+                     box.padding   = 0.35, 
+                     point.padding = 0.5,
+                     segment.color = 'grey50') +
+    geom_point(aes(x = stbl$summary[1:nrow(x_meas), "mean"], y = stbl$summary[(nrow(x_meas)+1):(nrow(x_meas)*2), "mean"]),
+               size=3, col="red") +
+    labs(title = paste0("size-adjusted ",one_phen[1]), x = "parents", y = "lab-reared adults") +
+    theme(legend.position = "none",
+          plot.title = element_text(size = 19, hjust = 0.5),
+          axis.title = element_text(size = 18),
+          axis.text = element_text(size=11),
+          axis.ticks = element_line(size = 0.7),
+          panel.background = element_blank(),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.5),
+          axis.line = element_line(size = 0.2, linetype = "solid",
+                                   colour = "black"),
+          panel.grid = element_line(colour = "gray70", size = 0.2)))
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_plasticity_adj-", one_phen[1], ".svg"),
+       plot=pp, width=10, height=8)
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_plasticity_adj-", one_phen[1], ".pdf"),
+       plot=pp, width=10, height=8)

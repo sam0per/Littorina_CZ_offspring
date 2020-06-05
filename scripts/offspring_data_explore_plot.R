@@ -583,18 +583,39 @@ table(OFF$sex)
 #######################
 ####### spatial #######
 #######################
+rm(list = ls())
+island <- "CZA"
 raw_dir <- paste0(island, "_off_SW/", island, "_off_raw_data")
-spa_fl <- list.files(raw_dir, pattern = "spatial", full.names = TRUE)
+(spa_fl <- list.files(raw_dir, pattern = "spatial", full.names = TRUE))
 CZ_spa <- read.csv(spa_fl[1])
 head(CZ_spa)
-head(CZ)
+# head(CZ)
 OFF_spa <- read.csv(spa_fl[2])
 head(OFF_spa)
-head(OFF)
+# head(OFF)
 OFF_spa$snail_ID <- paste(substr(OFF_spa$snail_ID, start = 1, stop = 1), substr(OFF_spa$snail_ID, start = 2, stop = 3),
                           sep = "_")
+OFF_spa$pop <- substr(OFF_spa$snail_ID, start = 1, stop = 1)
+table(OFF_spa$pop)
 with(data = CZ_spa, plot(X, Y))
-with(data = OFF_spa, plot(x, y))
+with(data = OFF_spa, points(x, y, col = 'red'))
+abline(h = min(OFF_spa$y)-5)
+abline(v = max(OFF_spa$x)+3)
+CZ_spa <- CZ_spa[CZ_spa$X < (max(OFF_spa$x)+3) & CZ_spa$Y > min(OFF_spa$y)-5, ]
+head(CZ_spa)
+with(data = CZ_spa, plot(X, Y))
+with(data = OFF_spa, points(x, y, col = 'red'))
+
+if (island=="CZA") {
+  dat_dir = "CZA_off_SW/CZA_off_final_data"
+} else {
+  dat_dir = "CZD_off_SW/CZD_off_final_data"
+}
+odate = c("20200406", "20200511")
+tbl1 = read.csv(paste0(dat_dir, "/", island, "_all_phenos_main_", odate[2], ".csv"))
+head(tbl1)
+tbl1 <- merge(tbl1, CZ_spa, by = "snail_ID")
+table(tbl1$sex)
 
 library(RANN)
 library(magrittr)
@@ -603,12 +624,27 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 # closest <- nn2(data = CZ_spa[, c("X", "Y")], query = OFF_spa[, c("x", "y")], k = 1)
-closest <- nn2(data = OFF_spa[, c("x", "y")], query = CZ_spa[, c("X", "Y")], k = 1)
-closest <- sapply(closest, cbind) %>% as_tibble
-closest$X <- OFF_spa[closest$nn.idx, "x"]
-closest$Y <- OFF_spa[closest$nn.idx, "y"]
+closest <- nn2(data = OFF_spa[, c("x", "y")], query = CZ_spa[, c("X", "Y")], k = 5, searchtype = "radius", radius = 5)
+(closest <- sapply(closest, cbind) %>% as_tibble)
+# closest$X <- OFF_spa[closest$nn.idx, "x"]
+closest$X <- ifelse(closest$nn.idx==0, yes = NA, no = OFF_spa[closest$nn.idx, "x"])
+closx <- apply(closest$nn.idx, MARGIN = 2, FUN = function(x) {
+  ifelse(x==0, yes = NA, no = OFF_spa[x, "x"])
+})
+closy <- apply(closest$nn.idx, MARGIN = 2, FUN = function(x) {
+  ifelse(x==0, yes = NA, no = OFF_spa[x, "y"])
+})
+# closest$Y <- OFF_spa[closest$nn.idx, "y"]
+closest$Y <- ifelse(closest$nn.idx==0, yes = NA, no = OFF_spa[closest$nn.idx, "y"])
 head(closest)
-with(data = closest, plot(X, Y))
+with(data = OFF_spa, plot(x, y))
+points(closx[,1], closy[,1], col = 'blue')
+points(closx[,2], closy[,2], col = 'red')
+points(closx[,3], closy[,3], col = 'green')
+points(closx[,4], closy[,4], col = 'orange')
+points(closx[,5], closy[,5], col = 'purple')
+
+with(data = closest, points(X, Y, col = 'blue'))
 OFF_spa$LCmeanDist <- CZ_spa[closest$nn.idx, "LCmeanDist"]
 head(OFF_spa)
 OFF_spa = separate(data = OFF_spa, col = "snail_ID", into = c("pop", "ID"), sep = "_")

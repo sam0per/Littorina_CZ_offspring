@@ -1,5 +1,18 @@
 rm(list = ls())
-island = "CZD"
+
+.packagesdev = "thomasp85/patchwork"
+.packages = c("ggplot2", "reshape2", "parallel", "optparse", "tidyr", "splitstackshape", "data.table", "gdata",
+              "Rmisc", "ggrepel", "dplyr")
+# Install CRAN packages (if not already installed)
+.inst <- .packages %in% installed.packages()
+.instdev <- basename(.packagesdev) %in% installed.packages()
+if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
+if(length(.packagesdev[!.instdev]) > 0) devtools::install_github(.packagesdev[!.instdev])
+# Load packages into session
+lapply(.packages, require, character.only=TRUE)
+lapply(basename(.packagesdev), require, character.only=TRUE)
+
+island = "CZA"
 if (island=="CZA") {
   dat_dir = "CZA_off_SW/CZA_off_final_data"
 } else {
@@ -7,6 +20,9 @@ if (island=="CZA") {
 }
 odate = c("20200406", "20200511")
 tbl1 = read.csv(paste0(dat_dir, "/", island, "_all_phenos_main_", odate[2], ".csv"))
+head(tbl1)
+tbl2 <- merge(tbl1, CZ_s, by = "snail_ID")
+table(tbl2$sex)
 # OFF = read.csv(paste0(dat_dir, "/", island, "_off_all_phenos_main_", odate[1], ".csv"))
 # colnames(CZ)
 # CZ <- CZ[, order(colnames(CZ))]
@@ -80,3 +96,4 @@ nu_CZD <- tbl1[-which.max(tbl1$size_log), ]
     labs(col = 'maturity'))
 tbl1 <- nu_CZD
 ggsave(filename = paste0(fig_dir, "/", island, "_diagn_size_maturity.pdf"), plot = diagn1, width = 8, height = 7)
+########################
