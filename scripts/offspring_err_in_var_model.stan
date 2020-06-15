@@ -36,8 +36,8 @@ transformed parameters {
 model {
   x_lat ~ normal(0, 5);
   alpha ~ normal(0, 5);
-  beta ~ normal(1, 5);
-  sigma ~ cauchy(0, 2);
+  beta ~ normal(0.5, 5);
+  sigma ~ lognormal(0, 1);
   
   x ~ normal(x_lat, sd_x);
   y_lat ~ normal(mu_yhat, sigma);

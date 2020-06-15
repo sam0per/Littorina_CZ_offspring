@@ -118,6 +118,7 @@ head(mod_dat)
 
 # boxplot to check for outliers
 head(mod_dat)
+# out_phen <- one_phen
 out_phen <- one_phen[2]
 (p3 = ggplot(data = mod_dat, aes_string(x = "pop", y = out_phen, fill = "pop")) +
     facet_wrap(~maturity) +
@@ -664,33 +665,43 @@ head(no_out)
 table(no_out[no_out$generation==0, "maturity"])
 x_meas <- no_out[no_out$generation==0 & no_out$maturity=="adult", ]
 x_meas <- aggregate(x = x_meas$scaled_bold_score, by = list(pop = x_meas$pop),
-                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE)))
+                    FUN = function(x) c(mean = mean(x, na.rm = TRUE), sd = sd(x, na.rm = TRUE), N = length(x)))
+# sum(x_meas$pop=="P")
+x_meas$se <- x_meas$x[, "sd"] / sqrt(x_meas$x[, "N"])
+x_meas$generation <- 0
 
 table(no_out[no_out$generation==1, "maturity"])
 y_meas <- no_out[no_out$generation==1 & no_out$maturity=="adult", ]
 y_meas <- aggregate(x = y_meas$scaled_bold_score, by = list(pop = y_meas$pop),
-                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE)))
+                    FUN = function(y) c(mean = mean(y, na.rm = TRUE), sd = sd(y, na.rm = TRUE), N = length(y)))
+# sum(y_meas$pop=="P")
+y_meas$se <- y_meas$x[, "sd"] / sqrt(y_meas$x[, "N"])
+y_meas$generation <- 1
 
 pop_diff <- setdiff(x_meas$pop, y_meas$pop)
 if (length(pop_diff) != 0) {
   x_meas <- x_meas[x_meas$pop!=pop_diff, ]
 }
 
+res_dir = paste0(island, "_off_SW/", island, "_off_results/")
+dir.create(paste0(res_dir, "models"))
+dir.create(paste0(res_dir, "tables"))
+
+write.csv(x = rbind(x_meas, y_meas), file = paste0(res_dir, "tables/", island, "_xy_meas_", one_phen, ".csv"))
+
 stanfile = "Littorina_offspring/scripts/offspring_err_in_var_model.stan"
 writeLines(readLines(stanfile))
 rstan_options(auto_write = TRUE)
 # options(mc.cores = 4)
 options(mc.cores = parallel::detectCores(logical = FALSE) - 2)
-dat = list(N = nrow(x_meas), x = x_meas$x[, "mean"], sd_x = x_meas$x[, "sd"],
-           y = y_meas$x[, "mean"], sd_y = y_meas$x[, "sd"])
+dat = list(N = nrow(x_meas), x = x_meas$x[, "mean"], sd_x = x_meas$se,
+           y = y_meas$x[, "mean"], sd_y = y_meas$se)
 err_in_var <- rstan::stan(file = stanfile,
                           data = dat, iter = 12000, warmup = 4000,
                           chains=4, refresh=12000,
                           control = list(stepsize = 0.01, adapt_delta = 0.99, max_treedepth = 15))
 
-res_dir = paste0(island, "_off_SW/", island, "_off_results/")
-dir.create(paste0(res_dir, "models"))
-dir.create(paste0(res_dir, "tables"))
+
 
 saveRDS(err_in_var, paste0(res_dir, "models/", island, "_err_in_var_", one_phen, ".rds"))
 # err_in_var = readRDS(paste0(res_dir, "models/", island, "_err_in_var.rds"))
@@ -705,13 +716,20 @@ pairs(err_in_var, pars = pars, include = TRUE)
 dev.off()
 # print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 print(err_in_var, pars = pars, digits=3)
+# stan_pars = read.csv(file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_", one_phen, "_pars.csv"))
 
 # postd = extract(err_in_var)
 # names(postd)
 # dim(postd$alpha)
 stbl = rstan::summary(err_in_var)
 write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_", one_phen, ".csv"))
-
+# stbl = read.csv(file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_", one_phen, ".csv"))
+# head(stbl)
+stan_x_lat <- stbl$summary[grepl(pattern = "x_lat", x = rownames(stbl$summary)), "mean"]
+new_x_lat <- seq(from = min(stan_x_lat), to = max(stan_x_lat), length.out = 1000)
+new_mu_yhat <- stbl$summary["alpha", "mean"] + stbl$summary["beta", "mean"] * new_x_lat
+# new_mu_yhat <- stan_pars[1, "mean"] + stan_pars[2, "mean"] * new_x_lat
+# plot(x = new_x_lat, y = new_mu_yhat)
 # plasticty plot
 (pp <- ggplot() +
   geom_abline(slope = 1, linetype="dashed") +
@@ -724,6 +742,8 @@ write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_v
                    segment.color = 'grey50') +
   geom_point(aes(x = stbl$summary[1:nrow(x_meas), "mean"], y = stbl$summary[(nrow(x_meas)+1):(nrow(x_meas)*2), "mean"]),
              size=3, col="red") +
+  geom_line(aes(x = new_x_lat, y = new_mu_yhat),
+            size=2, col="red") +
   labs(title = one_phen, x = "parents", y = "lab-reared adults") +
   theme(legend.position = "none",
         plot.title = element_text(size = 19, hjust = 0.5),
@@ -740,7 +760,24 @@ ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island,
 ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_plasticity_", one_phen, ".pdf"),
        plot=pp, width=10, height=8)
 
+# diagnose parameter sigma
+y_meas$pop[order(y_meas$se)]
+x_meas$pop[order(x_meas$se)]
+mean(y_meas$se)
+mean(x_meas$se)
 
+col_genx = c("#5e3c99", "#e66101")
+(se_check <- ggplot(data = rbind(x_meas, y_meas)) +
+  geom_point(aes(x = pop, y = se, col = factor(generation)), size = 3) +
+  scale_color_manual(values = col_genx) +
+  labs(x = "", col = "generation") +
+  geom_text(aes(x = 2, y = 0.35, label = paste("mean se generation 0 (x):", round(mean(x_meas$se), 2))),
+            vjust = "inward", hjust = "inward") +
+  geom_text(aes(x = 16, y = 0.35, label = paste("mean se generation 1 (y):", round(mean(y_meas$se), 2))),
+            vjust = "inward", hjust = "inward"))
+ggsave(file=paste0(dirname(dat_dir), "/", island, "_off_final_figures/", island, "_off_se_diagnostic_", one_phen, ".pdf"),
+       plot=se_check, width=10, height=8)
+###################################
 # Size-adjusted means after scaling
 pred_dat
 # rm(list = setdiff(ls(), c("island", "one_phen")))
@@ -786,6 +823,7 @@ pairs(err_in_var, pars = pars, include = TRUE)
 dev.off()
 # print(err_in_var, pars=c("alpha", "beta", "sigma"), digits=3)
 print(err_in_var, pars = pars, digits=3)
+# stan_pars = read.csv(file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_adj-", one_phen[1], "_pars.csv"))
 
 # postd = extract(err_in_var)
 # names(postd)
@@ -795,6 +833,11 @@ stbl = rstan::summary(err_in_var)
 write.csv(x = stbl$summary, file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_adj-", one_phen[1], ".csv"))
 # xtable::xtable(stbl$summary)
 # xtable::xtable(stbl)
+stbl = read.csv(file = paste0(res_dir, "tables/", island, "_err_in_var_stanfit_adj-", one_phen[1], ".csv"))
+head(stbl)
+stan_x_lat <- stbl[grepl(pattern = "x_lat", x = stbl$X), "mean"]
+new_x_lat <- seq(from = min(stan_x_lat), to = max(stan_x_lat), length.out = 1000)
+new_mu_yhat <- stan_pars[1, "mean"] + stan_pars[2, "mean"] * new_x_lat
 
 plot(x_meas$x[, 'mean'], stbl$summary[grepl(pattern = "mu_yhat", x = row.names(stbl$summary)), 'mean'], col='red', pch=19)
 points(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
@@ -811,6 +854,8 @@ points(x_meas$x[, 'mean'], y_meas$x[, 'mean'])
                      segment.color = 'grey50') +
     geom_point(aes(x = stbl$summary[1:nrow(x_meas), "mean"], y = stbl$summary[(nrow(x_meas)+1):(nrow(x_meas)*2), "mean"]),
                size=3, col="red") +
+    geom_line(aes(x = new_x_lat, y = new_mu_yhat),
+              size=2, col="red") +
     labs(title = paste0("size-adjusted ",one_phen[1]), x = "parents", y = "lab-reared adults") +
     theme(legend.position = "none",
           plot.title = element_text(size = 19, hjust = 0.5),
